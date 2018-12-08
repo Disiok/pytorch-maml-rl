@@ -33,9 +33,13 @@ class BatchSampler(object):
             with torch.no_grad():
                 observations_tensor = torch.from_numpy(observations).to(device=device)
                 actions_tensor = policy(observations_tensor, params=params).sample()
-                intrinsic_rewards_tensor = intrinsic(torch.cat([observations_tensor, actions_tensor], dim=1))
                 actions = actions_tensor.cpu().numpy()
-                intrinsic_rewards = intrinsic_rewards_tensor.cpu().numpy()
+
+                if intrinsic is not None:
+                    intrinsic_rewards_tensor = intrinsic(torch.cat([observations_tensor, actions_tensor], dim=1))
+                    intrinsic_rewards = intrinsic_rewards_tensor.cpu().numpy()
+                else:
+                    intrinsic_rewards = None
             new_observations, rewards, dones, new_batch_ids, _ = self.envs.step(actions)
             episodes.append(observations, actions, rewards, batch_ids, intrinsic_rewards=intrinsic_rewards)
             observations, batch_ids = new_observations, new_batch_ids
