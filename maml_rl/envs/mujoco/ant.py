@@ -202,3 +202,44 @@ class AntPosEnv(AntEnv):
     def reset_task(self, task):
         self._task = task
         self._goal_pos = task['position']
+
+class AntGoalRingEnv(AntPosEnv):
+    """Ant environment with target positions distributed in a ring.
+    (https://github.com/RussellM2020/maesn_suite/blob/master/maesn/rllab/envs/mujoco/ant_env_rand_goal_ring.py)
+    """
+    def __init__(self, task={}, sparse=True):
+        self._sparse = sparse
+        super(AntGoalRingEnv, self).__init__(task)
+    
+    def step(self, action):
+        self.do_simulation(action, self.frame_skip)
+        xyposafter = self.get_body_com("torso")[:2]
+
+        if self._sparse and np.linalg.norm(xyposafter - self._goal_pos) > 0.8:
+            goal_reward = -np.sum(np.abs(self._goal_pos)) + 4.0 
+        else:
+            goal_reward = -np.sum(np.abs(xyposafter - self._goal_pos)) + 4.0
+        survive_reward = 0.05
+
+        ctrl_cost = 0.5 * 1e-2 * np.sum(np.square(action / self.action_scaling))
+        contact_cost = 0.5 * 1e-3 * np.sum(
+            np.square(np.clip(self.sim.data.cfrc_ext, -1, 1)))
+
+        observation = self._get_obs()
+        reward = goal_reward - ctrl_cost - contact_cost + survive_reward
+        state = self.state_vector()
+        notdone = np.isfinite(state).all() \
+            and state[2] >= 0.2 and state[2] <= 1.0
+        done = not notdone
+        infos = dict(reward_goal=goal_reward, reward_ctrl=-ctrl_cost,
+            reward_contact=-contact_cost, reward_survive=survive_reward,
+            task=self._task)
+        return (observation, reward, done, infos)
+    
+    def sample_tasks(self, num_tasks, radius=2.0):
+        angle = np.random.uniform(0, np.pi, size=(num_tasks,))
+        xpos = radius * np.cos(angle)
+        ypos = radius * np.sin(angle)
+        positions = np.concatenate([xpos[:, None], ypos[:, None]], axis=1)
+        tasks = [{'position': position} for position in positions]
+        return tasks

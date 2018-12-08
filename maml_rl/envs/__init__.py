@@ -45,6 +45,13 @@ register(
 )
 
 register(
+    'AntGoalRing-v0',
+    entry_point='maml_rl.envs.utils:mujoco_wrapper',
+    kwargs={'entry_point': 'maml_rl.envs.mujoco.ant:AntGoalRingEnv'},
+    max_episode_steps=200
+)
+
+register(
     'HalfCheetahVel-v1',
     entry_point='maml_rl.envs.utils:mujoco_wrapper',
     kwargs={'entry_point': 'maml_rl.envs.mujoco.half_cheetah:HalfCheetahVelEnv'},

@@ -19,7 +19,7 @@ def total_rewards(episodes_rewards, aggregation=torch.mean):
 
 def main(args):
     continuous_actions = (args.env_name in ['AntVel-v1', 'AntDir-v1',
-        'AntPos-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
+        'AntPos-v0', 'AntGoalRing-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
         '2DNavigation-v0'])
 
     writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
