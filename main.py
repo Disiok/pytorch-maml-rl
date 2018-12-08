@@ -8,6 +8,7 @@ from maml_rl.metalearner import MetaLearner
 from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
+from maml_rl.reward import IntrinsicReward
 
 from tensorboardX import SummaryWriter
 
@@ -37,16 +38,24 @@ def main(args):
             int(np.prod(sampler.envs.observation_space.shape)),
             int(np.prod(sampler.envs.action_space.shape)),
             hidden_sizes=(args.hidden_size,) * args.num_layers)
+
+        intrinsic_reward = IntrinsicReward(
+            int(np.prod(sampler.envs.observation_space.shape)) + int(np.prod(sampler.envs.action_space.shape)),
+            hidden_sizes=(args.hidden_size,) * args.num_layers)
     else:
         policy = CategoricalMLPPolicy(
             int(np.prod(sampler.envs.observation_space.shape)),
             sampler.envs.action_space.n,
             hidden_sizes=(args.hidden_size,) * args.num_layers)
+
+        intrinsic_reward = IntrinsicReward(
+            int(np.prod(sampler.envs.observation_space.shape)) + sampler.envs.action_space.n,
+            hidden_sizes=(args.hidden_size,) * args.num_layers)
     baseline = LinearFeatureBaseline(
         int(np.prod(sampler.envs.observation_space.shape)))
 
     metalearner = MetaLearner(sampler, policy, baseline, gamma=args.gamma,
-        fast_lr=args.fast_lr, tau=args.tau, device=args.device)
+        fast_lr=args.fast_lr, tau=args.tau, device=args.device, intrinsic=intrinsic_reward)
 
     for batch in range(args.num_batches):
         tasks = sampler.sample_tasks(num_tasks=args.meta_batch_size)

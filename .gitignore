@@ -110,3 +110,6 @@ saves/
 
 # Slurm
 *.out
+
+.vscode/
+MUJOCO_LOG.TXT

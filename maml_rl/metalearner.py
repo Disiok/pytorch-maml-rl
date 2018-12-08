@@ -1,3 +1,5 @@
+from IPython import embed
+
 import torch
 from torch.nn.utils.convert_parameters import (vector_to_parameters,
                                                parameters_to_vector)
@@ -27,13 +29,14 @@ class MetaLearner(object):
         (https://arxiv.org/abs/1502.05477)
     """
     def __init__(self, sampler, policy, baseline, gamma=0.95,
-                 fast_lr=0.5, tau=1.0, device='cpu'):
+                 fast_lr=0.5, tau=1.0, device='cpu', intrinsic=None):
         self.sampler = sampler
         self.policy = policy
         self.baseline = baseline
         self.gamma = gamma
         self.fast_lr = fast_lr
         self.tau = tau
+        self.intrinsic = intrinsic
         self.to(device)
 
     def inner_loss(self, episodes, params=None):
@@ -76,12 +79,12 @@ class MetaLearner(object):
         for task in tasks:
             self.sampler.reset_task(task)
             train_episodes = self.sampler.sample(self.policy,
-                gamma=self.gamma, device=self.device)
+                gamma=self.gamma, device=self.device, intrinsic=self.intrinsic)
 
             params = self.adapt(train_episodes, first_order=first_order)
 
             valid_episodes = self.sampler.sample(self.policy, params=params,
-                gamma=self.gamma, device=self.device)
+                gamma=self.gamma, device=self.device, intrinsic=self.intrinsic)
             episodes.append((train_episodes, valid_episodes))
         return episodes
 
