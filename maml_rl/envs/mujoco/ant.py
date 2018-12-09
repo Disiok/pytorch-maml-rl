@@ -1,7 +1,16 @@
+import os
 import numpy as np
-from gym.envs.mujoco import AntEnv as AntEnv_
+from gym import utils
+from gym.envs.mujoco import mujoco_env
+from IPython import embed
 
-class AntEnv(AntEnv_):
+class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
+    def __init__(self, model_path='ant_maesn.xml'):
+        fullpath = os.path.join(os.path.dirname(__file__), "assets", model_path)
+
+        mujoco_env.MujocoEnv.__init__(self, fullpath, 5)
+        utils.EzPickle.__init__(self)
+
     @property
     def action_scaling(self):
         if (not hasattr(self, 'action_space')) or (self.action_space is None):
@@ -10,6 +19,27 @@ class AntEnv(AntEnv_):
             lb, ub = self.action_space.low, self.action_space.high
             self._action_scaling = 0.5 * (ub - lb)
         return self._action_scaling
+    
+    def step(self, a):
+        xposbefore = self.get_body_com("torso")[0]
+        self.do_simulation(a, self.frame_skip)
+        xposafter = self.get_body_com("torso")[0]
+        forward_reward = (xposafter - xposbefore)/self.dt
+        ctrl_cost = .5 * np.square(a).sum()
+        contact_cost = 0.5 * 1e-3 * np.sum(
+            np.square(np.clip(self.sim.data.cfrc_ext, -1, 1)))
+        survive_reward = 1.0
+        reward = forward_reward - ctrl_cost - contact_cost + survive_reward
+        state = self.state_vector()
+        notdone = np.isfinite(state).all() \
+            and state[2] >= 0.2 and state[2] <= 1.0
+        done = not notdone
+        ob = self._get_obs()
+        return ob, reward, done, dict(
+            reward_forward=forward_reward,
+            reward_ctrl=-ctrl_cost,
+            reward_contact=-contact_cost,
+            reward_survive=survive_reward)
 
     def _get_obs(self):
         return np.concatenate([
@@ -20,23 +50,29 @@ class AntEnv(AntEnv_):
             self.get_body_com("torso").flat,
         ]).astype(np.float32).flatten()
 
+    def reset_model(self):
+        qpos = self.init_qpos + self.np_random.uniform(size=self.model.nq, low=-.1, high=.1)
+        qvel = self.init_qvel + self.np_random.randn(self.model.nv) * .1
+        self.set_state(qpos, qvel)
+        return self._get_obs()
+
     def viewer_setup(self):
-        camera_id = self.model.camera_name2id('track')
-        self.viewer.cam.type = 2
-        self.viewer.cam.fixedcamid = camera_id
+        # camera_id = self.model.camera_name2id('track')
+        # self.viewer.cam.type = 2
+        # self.viewer.cam.fixedcamid = 0
         self.viewer.cam.distance = self.model.stat.extent * 0.35
         # Hide the overlay
-        self.viewer._hide_overlay = True
+        # self.viewer._hide_overlay = True
 
     def render(self, mode='human'):
         if mode == 'rgb_array':
-            self._get_viewer().render()
+            self._get_viewer(mode).render()
             # window size used for old mujoco-py:
             width, height = 500, 500
             data = self._get_viewer().read_pixels(width, height, depth=False)
             return data
         elif mode == 'human':
-            self._get_viewer().render()
+            self._get_viewer(mode).render()
 
 class AntVelEnv(AntEnv):
     """Ant environment with target velocity, as described in [1]. The 
@@ -199,6 +235,15 @@ class AntPosEnv(AntEnv):
         tasks = [{'position': position} for position in positions]
         return tasks
 
+    def reset_model(self):
+        qpos = self.init_qpos + self.np_random.uniform(size=self.model.nq, low=-.1, high=.1)
+        qvel = self.init_qvel + self.np_random.randn(self.model.nv) * .1
+        self.set_state(qpos, qvel)
+
+        # This is to change the location of the visual ball indicating the target
+        self.model.site_pos[0, :2] = self._goal_pos
+        return self._get_obs()
+
     def reset_task(self, task):
         self._task = task
         self._goal_pos = task['position']
@@ -207,7 +252,7 @@ class AntGoalRingEnv(AntPosEnv):
     """Ant environment with target positions distributed in a ring.
     (https://github.com/RussellM2020/maesn_suite/blob/master/maesn/rllab/envs/mujoco/ant_env_rand_goal_ring.py)
     """
-    def __init__(self, task={}, sparse=True):
+    def __init__(self, task={}, sparse=False):
         self._sparse = sparse
         super(AntGoalRingEnv, self).__init__(task)
     
@@ -236,7 +281,9 @@ class AntGoalRingEnv(AntPosEnv):
             task=self._task)
         return (observation, reward, done, infos)
     
-    def sample_tasks(self, num_tasks, radius=2.0):
+    def sample_tasks(self, num_tasks, radius=2.0, seed=None):
+        if seed is not None:
+            np.random.seed(seed)
         angle = np.random.uniform(0, np.pi, size=(num_tasks,))
         xpos = radius * np.cos(angle)
         ypos = radius * np.sin(angle)

@@ -50,7 +50,7 @@ class PusherTaskEnv(PusherEnv):
     """Pusher environment with multiple tasks and sparse rewards:
     (https://github.com/RussellM2020/maesn_suite/blob/master/maesn/rllab/envs/mujoco/pusher.py)
     """
-    def __init__(self, task={}, sparse=True):
+    def __init__(self, task={}, sparse=False):
         self._task = task
         self._block_choice = task.get('block_choice', 0)
         self._goal = task.get('goal', np.array([0., 0.]))

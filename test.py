@@ -5,13 +5,16 @@ import torch
 import json
 import logging
 import time
+from torch import optim
+from IPython import embed
 
 from maml_rl.metalearner import MetaLearner
-from maml_rl.intrinsic_metalearner import IntrinsicMetaLearner
 from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
 from maml_rl.reward import IntrinsicReward
+from maml_rl.utils.torch_utils import (weighted_mean, detach_distribution,
+                                       weighted_normalize)
 
 from tensorboardX import SummaryWriter
 
@@ -23,8 +26,29 @@ def total_rewards(episodes_rewards, aggregation=torch.mean):
         for rewards in episodes_rewards], dim=0))
     return rewards.item()
 
+def inner_loss(policy, baseline, episodes, params=None):
+    """Compute the inner loss for the one-step gradient update. The inner 
+    loss is REINFORCE with baseline [2], computed on advantages estimated 
+    with Generalized Advantage Estimation (GAE, [3]).
+    """
+    values = baseline(episodes)
+    advantages = episodes.gae(values, tau=1.0)
+    advantages = weighted_normalize(advantages, weights=episodes.mask)
+
+    pi = policy(episodes.observations, params=params)
+    log_probs = pi.log_prob(episodes.actions)
+    if log_probs.dim() > 2:
+        log_probs = torch.sum(log_probs, dim=2)
+    loss = -weighted_mean(log_probs * advantages, dim=0,
+        weights=episodes.mask)
+    
+    if loss < -400:
+        embed()
+
+    return loss
+
 def main(args):
-    continuous_actions = (args.env_name in ['Pusher-v0', 'AntVel-v1', 'AntDir-v1',
+    continuous_actions = (args.env_name in ['Wheeled-v0', 'Pusher-v0', 'AntVel-v1', 'AntDir-v1',
         'AntPos-v0', 'AntGoalRing-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
         '2DNavigation-v0'])
 
@@ -39,16 +63,19 @@ def main(args):
 
     sampler = BatchSampler(args.env_name, batch_size=args.fast_batch_size,
         num_workers=args.num_workers)
+
     if continuous_actions:
         policy = NormalMLPPolicy(
             int(np.prod(sampler.envs.observation_space.shape)),
             int(np.prod(sampler.envs.action_space.shape)),
             hidden_sizes=(args.hidden_size,) * args.num_layers)
-
+        
         if args.intrinsic_reward:
-            reward_policy = IntrinsicReward(
+            intrinsic_reward = IntrinsicReward(
                 int(np.prod(sampler.envs.observation_space.shape)) + int(np.prod(sampler.envs.action_space.shape)),
                 hidden_sizes=(args.hidden_size,) * args.num_layers)
+        else:
+            intrinsic_reward = None
     else:
         policy = CategoricalMLPPolicy(
             int(np.prod(sampler.envs.observation_space.shape)),
@@ -56,52 +83,41 @@ def main(args):
             hidden_sizes=(args.hidden_size,) * args.num_layers)
 
         if args.intrinsic_reward:
-            reward_policy = IntrinsicReward(
+            intrinsic_reward = IntrinsicReward(
                 int(np.prod(sampler.envs.observation_space.shape)) + sampler.envs.action_space.n,
                 hidden_sizes=(args.hidden_size,) * args.num_layers)
+        else:
+            intrinsic_reward = None
     baseline = LinearFeatureBaseline(
         int(np.prod(sampler.envs.observation_space.shape)))
+    optimizer = optim.SGD(policy.parameters(), lr=1e-2)
 
-
-    if args.intrinsic_reward:
-        metalearner = IntrinsicMetaLearner(sampler, policy, reward_policy, baseline, gamma=args.gamma,
-            fast_lr=args.fast_lr, tau=args.tau, device=args.device)
-    else:
-        metalearner = MetaLearner(sampler, policy, baseline, gamma=args.gamma,
-            fast_lr=args.fast_lr, tau=args.tau, device=args.device)
-
+    task = sampler.sample_tasks(num_tasks=1, seed=999)[0]
     for batch in range(args.num_batches):
-        start_time = time.time()
-        tasks = sampler.sample_tasks(num_tasks=args.meta_batch_size)
-        task_sampling_time = time.time()
-        logger.debug('Finished sampling tasks in {:.3f} seconds'.format(task_sampling_time - start_time))
+        logger.debug('Processing batch {}'.format(batch))
 
-        episodes = metalearner.sample(tasks, first_order=args.first_order)
-        episode_sampling_time = time.time()
-        logger.debug('Finished sampling episodes in {:.3f} seconds'.format(episode_sampling_time - task_sampling_time))
+        sampler.reset_task(task)
+        train_episodes = sampler.sample(policy, gamma=args.gamma, device=args.device)
 
-        metalearner.step(episodes, max_kl=args.max_kl, cg_iters=args.cg_iters,
-            cg_damping=args.cg_damping, ls_max_steps=args.ls_max_steps,
-            ls_backtrack_ratio=args.ls_backtrack_ratio)
-        step_time = time.time()
-        logger.debug('Finished metalearner step in {:.3f} seconds'.format(step_time - episode_sampling_time))
+        # Fit the baseline to the training episodes
+        baseline.fit(train_episodes)
+        # Get the loss on the training episodes
+        optimizer.zero_grad()
+        loss = inner_loss(policy, baseline, train_episodes)
+        print(loss.item())
+        loss.backward()
+        optimizer.step()
+        episodes = [train_episodes]
 
         # Tensorboard
-        writer.add_scalar('total_rewards/before_update',
-            total_rewards([ep.rewards for ep, _ in episodes]), batch)
-        writer.add_scalar('total_rewards/after_update',
-            total_rewards([ep.rewards for _, ep in episodes]), batch)
+        writer.add_scalar('meta-test/loss', loss.item(), batch)
+        writer.add_scalar('meta-test/total_rewards',
+            total_rewards([ep.rewards for ep in episodes]), batch)
 
         # Save policy network
         with open(os.path.join(save_folder,
                 'policy-{0}.pt'.format(batch)), 'wb') as f:
             torch.save(policy.state_dict(), f)
-        
-        # Save intrinsic reward network
-        if args.intrinsic_reward:
-            with open(os.path.join(save_folder,
-                    'reward-policy-{0}.pt'.format(batch)), 'wb') as f:
-                torch.save(reward_policy.state_dict(), f)
 
 
 if __name__ == '__main__':

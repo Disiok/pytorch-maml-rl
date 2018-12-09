@@ -6,10 +6,10 @@ def weighted_mean(tensor, dim=None, weights=None):
         out = torch.mean(tensor)
     if dim is None:
         out = torch.sum(tensor * weights)
-        out.div_(torch.sum(weights))
+        out = out.div(torch.sum(weights))
     else:
         mean_dim = torch.sum(tensor * weights, dim=dim)
-        mean_dim.div_(torch.sum(weights, dim=dim))
+        mean_dim = mean_dim.div(torch.sum(weights, dim=dim))
         out = torch.mean(mean_dim)
     return out
 
@@ -17,7 +17,7 @@ def weighted_normalize(tensor, dim=None, weights=None, epsilon=1e-8):
     mean = weighted_mean(tensor, dim=dim, weights=weights)
     out = tensor * (1 if weights is None else weights) - mean
     std = torch.sqrt(weighted_mean(out ** 2, dim=dim, weights=weights))
-    out.div_(std + epsilon)
+    out = out.div(std + epsilon)
     return out
 
 def detach_distribution(pi):

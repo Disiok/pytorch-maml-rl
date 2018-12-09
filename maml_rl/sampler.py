@@ -26,15 +26,15 @@ class TrajectorySampler(object):
                 action_tensor = policy(observation_tensor).sample()
                 action = action_tensor.cpu().numpy()
             new_observation, reward, done, info = self.env.step(action)
+            observation = new_observation
+
             if render: 
                 self.env.render(mode='human')
-            observation = new_observation
 
     def reset_task(self, task):
         self.env.unwrapped.reset_task(task)
-        return True
 
-    def sample_tasks(self, num_tasks, seed=999):
+    def sample_tasks(self, num_tasks, seed=None):
         tasks = self.env.unwrapped.sample_tasks(num_tasks, seed=seed)
         return tasks
 
@@ -50,7 +50,7 @@ class BatchSampler(object):
             queue=self.queue)
         self._env = gym.make(env_name)
 
-    def sample(self, policy, params=None, gamma=0.95, device='cpu', delay=20, intrinsic=None):
+    def sample(self, policy, params=None, gamma=0.95, device='cpu', delay=20):
         episodes = BatchEpisodes(batch_size=self.batch_size, gamma=gamma, device=device, delay=delay)
         for i in range(self.batch_size):
             self.queue.put(i)
@@ -63,14 +63,8 @@ class BatchSampler(object):
                 observations_tensor = torch.from_numpy(observations).to(device=device)
                 actions_tensor = policy(observations_tensor, params=params).sample()
                 actions = actions_tensor.cpu().numpy()
-
-                if intrinsic is not None:
-                    intrinsic_rewards_tensor = intrinsic(torch.cat([observations_tensor, actions_tensor], dim=1))
-                    intrinsic_rewards = intrinsic_rewards_tensor.cpu().numpy()
-                else:
-                    intrinsic_rewards = None
             new_observations, rewards, dones, new_batch_ids, _ = self.envs.step(actions)
-            episodes.append(observations, actions, rewards, batch_ids, intrinsic_rewards=intrinsic_rewards)
+            episodes.append(observations, actions, rewards, batch_ids)
             observations, batch_ids = new_observations, new_batch_ids
         return episodes
 
@@ -79,6 +73,6 @@ class BatchSampler(object):
         reset = self.envs.reset_task(tasks)
         return all(reset)
 
-    def sample_tasks(self, num_tasks):
-        tasks = self._env.unwrapped.sample_tasks(num_tasks)
+    def sample_tasks(self, num_tasks, seed=None):
+        tasks = self._env.unwrapped.sample_tasks(num_tasks, seed=seed)
         return tasks

@@ -49,7 +49,7 @@ class WheeledTaskEnv(WheeledEnv):
     """Pusher environment with multiple tasks and sparse rewards:
     (https://github.com/RussellM2020/maesn_suite/blob/master/maesn/rllab/envs/mujoco/pusher.py)
     """
-    def __init__(self, task={}, sparse=True):
+    def __init__(self, task={}, sparse=False):
         self._task = task
         self._goal_pos = task.get('position', np.zeros((2,), dtype=np.float32))
         self._action_scaling = None
@@ -87,6 +87,8 @@ class WheeledTaskEnv(WheeledEnv):
         qpos = self.init_qpos
         qvel = self.init_qvel
         self.set_state(qpos, qvel)
+
+        self.model.body_pos[-1][:2] = self._goal_pos
         return self._get_obs()
 
     def reset_task(self, task):
