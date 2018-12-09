@@ -3,6 +3,8 @@ import gym
 import numpy as np
 import torch
 import json
+import logging
+import time
 
 from maml_rl.metalearner import MetaLearner
 from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
@@ -11,6 +13,9 @@ from maml_rl.sampler import BatchSampler
 from maml_rl.reward import IntrinsicReward
 
 from tensorboardX import SummaryWriter
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def total_rewards(episodes_rewards, aggregation=torch.mean):
     rewards = torch.mean(torch.stack([aggregation(torch.sum(rewards, dim=0))
@@ -64,11 +69,18 @@ def main(args):
         fast_lr=args.fast_lr, tau=args.tau, device=args.device, intrinsic=intrinsic_reward)
 
     for batch in range(args.num_batches):
+        start_time = time.time()
         tasks = sampler.sample_tasks(num_tasks=args.meta_batch_size)
+        task_sampling_time = time.time()
+        logger.debug('Finished sampling tasks in {} seconds'.format(task_sampling_time - start_time))
         episodes = metalearner.sample(tasks, first_order=args.first_order)
+        episode_sampling_time = time.time()
+        logger.debug('Finished sampling episodes in {} seconds'.format(episode_sampling_time - task_sampling_time))
         metalearner.step(episodes, max_kl=args.max_kl, cg_iters=args.cg_iters,
             cg_damping=args.cg_damping, ls_max_steps=args.ls_max_steps,
             ls_backtrack_ratio=args.ls_backtrack_ratio)
+        step_time = time.time()
+        logger.debug('Finished metalearner step in {} seconds'.format(step_time - episode_sampling_time))
 
         # Tensorboard
         writer.add_scalar('total_rewards/before_update',
