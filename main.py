@@ -72,15 +72,17 @@ def main(args):
         start_time = time.time()
         tasks = sampler.sample_tasks(num_tasks=args.meta_batch_size)
         task_sampling_time = time.time()
-        logger.debug('Finished sampling tasks in {} seconds'.format(task_sampling_time - start_time))
+        logger.debug('Finished sampling tasks in {:.3f} seconds'.format(task_sampling_time - start_time))
+
         episodes = metalearner.sample(tasks, first_order=args.first_order)
         episode_sampling_time = time.time()
-        logger.debug('Finished sampling episodes in {} seconds'.format(episode_sampling_time - task_sampling_time))
+        logger.debug('Finished sampling episodes in {:.3f} seconds'.format(episode_sampling_time - task_sampling_time))
+
         metalearner.step(episodes, max_kl=args.max_kl, cg_iters=args.cg_iters,
             cg_damping=args.cg_damping, ls_max_steps=args.ls_max_steps,
             ls_backtrack_ratio=args.ls_backtrack_ratio)
         step_time = time.time()
-        logger.debug('Finished metalearner step in {} seconds'.format(step_time - episode_sampling_time))
+        logger.debug('Finished metalearner step in {:.3f} seconds'.format(step_time - episode_sampling_time))
 
         # Tensorboard
         writer.add_scalar('total_rewards/before_update',

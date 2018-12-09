@@ -19,7 +19,7 @@ def total_rewards(episodes_rewards, aggregation=torch.mean):
     return rewards.item()
 
 def main(args):
-    continuous_actions = (args.env_name in ['Pusher-v0', 'AntVel-v1', 'AntDir-v1',
+    continuous_actions = (args.env_name in ['Wheeled-v0', 'Pusher-v0', 'AntVel-v1', 'AntDir-v1',
         'AntPos-v0', 'AntGoalRing-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
         '2DNavigation-v0'])
 
@@ -39,11 +39,9 @@ def main(args):
             sampler.env.action_space.n,
             hidden_sizes=(args.hidden_size,) * args.num_layers)
 
-    for batch in range(args.num_batches):
-        tasks = sampler.sample_tasks(num_tasks=args.meta_batch_size)
-        for task in tasks:
-            sampler.reset_task(task)
-            episodes = sampler.sample(policy)
+    task = sampler.sample_tasks(1)[0]
+    sampler.reset_task(task)
+    episodes = sampler.sample(policy)
 
 if __name__ == '__main__':
     import argparse

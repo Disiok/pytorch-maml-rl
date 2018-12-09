@@ -80,7 +80,10 @@ class PusherTaskEnv(PusherEnv):
 
         return (observation, reward, done, infos)
 
-    def sample_tasks(self, num_tasks):
+    def sample_tasks(self, num_tasks, seed=None):
+        if seed is not None:
+            np.random.seed(seed)
+
         # TODO(suo): Clean up this code
         tasks = []
         blockarr = np.array(range(5))

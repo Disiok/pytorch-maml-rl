@@ -72,6 +72,13 @@ register(
     max_episode_steps=200
 )
 
+register(
+    'Wheeled-v0',
+    entry_point='maml_rl.envs.utils:mujoco_wrapper',
+    kwargs={'entry_point': 'maml_rl.envs.mujoco.wheeled:WheeledTaskEnv'},
+    max_episode_steps=200
+)
+
 # 2D Navigation
 # ----------------------------------------
 

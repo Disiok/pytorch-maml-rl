@@ -16,7 +16,7 @@ class TrajectorySampler(object):
         self.env_name = env_name
         self.env = gym.make(env_name)
     
-    def sample(self, policy, device='cpu'):
+    def sample(self, policy, device='cpu', render=True):
         observation = self.env.reset()
         done = False
         
@@ -26,15 +26,16 @@ class TrajectorySampler(object):
                 action_tensor = policy(observation_tensor).sample()
                 action = action_tensor.cpu().numpy()
             new_observation, reward, done, info = self.env.step(action)
-            self.env.render(mode='human')
+            if render: 
+                self.env.render(mode='human')
             observation = new_observation
 
     def reset_task(self, task):
         self.env.unwrapped.reset_task(task)
         return True
 
-    def sample_tasks(self, num_tasks):
-        tasks = self.env.unwrapped.sample_tasks(num_tasks)
+    def sample_tasks(self, num_tasks, seed=999):
+        tasks = self.env.unwrapped.sample_tasks(num_tasks, seed=seed)
         return tasks
 
 
