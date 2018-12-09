@@ -10,6 +10,34 @@ def make_env(env_name):
         return gym.make(env_name)
     return _make_env
 
+
+class TrajectorySampler(object):
+    def __init__(self, env_name):
+        self.env_name = env_name
+        self.env = gym.make(env_name)
+    
+    def sample(self, policy, device='cpu'):
+        observation = self.env.reset()
+        done = False
+        
+        while not done:
+            with torch.no_grad():
+                observation_tensor = torch.from_numpy(observation).to(device=device)
+                action_tensor = policy(observation_tensor).sample()
+                action = action_tensor.cpu().numpy()
+            new_observation, reward, done, info = self.env.step(action)
+            self.env.render(mode='human')
+            observation = new_observation
+
+    def reset_task(self, task):
+        self.env.unwrapped.reset_task(task)
+        return True
+
+    def sample_tasks(self, num_tasks):
+        tasks = self.env.unwrapped.sample_tasks(num_tasks)
+        return tasks
+
+
 class BatchSampler(object):
     def __init__(self, env_name, batch_size, num_workers=mp.cpu_count() - 1):
         self.env_name = env_name
