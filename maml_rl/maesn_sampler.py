@@ -1,7 +1,6 @@
 #
 #
 #
-from __future__ import division, print_function
 
 import gym
 import torch
