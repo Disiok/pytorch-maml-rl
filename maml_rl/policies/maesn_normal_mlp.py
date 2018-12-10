@@ -154,7 +154,62 @@ class MAESNNormalMLPPolicy(Policy):
             min=self.min_log_std
         ))
 
+        if observations.dim() == 2:
+            sigma = sigma.view(1, -1).expand(observations.size(0), -1)
+        else:
+            sigma = sigma.view(1, 1, -1).expand(observations.size(0), observations.size(1), -1)
+
         return torch.distributions.Normal(mu, sigma)
+
+    #def update_params(self,
+    #                  loss,
+    #                  step_size=0.5,
+    #                  first_order=False,
+    #                  latent_only=True):
+    #    """
+    #    Apply one-step gradient update on loss function.
+
+    #    @required
+    #    :param loss        [torch.Tensor]: The loss value.
+
+    #    @optional
+    #    :param step_size   [float]:        The default step size.
+    #    :param first_order [bool]:         Use first order approximation.
+    #    :param latent_only [bool]:         Only optimize latent space.
+
+    #    :return            [OrderedDict]:  The updated parameters.
+    #    """
+    #    grad_params = []
+    #    named_grad_params = []
+    #    for (name, param) in self.named_parameters():
+    #        if (name == 'latent_mus_step_size' or
+    #            name == 'latent_sigmas_step_size'):
+    #            continue
+
+    #        if not latent_only:
+    #            grad_params.append(param)
+    #            named_grad_params.append((name, param))
+    #        elif (name == 'latent_mus' or name == 'latent_sigmas'):
+    #            grad_params.append(param)
+    #            named_grad_params.append((name, param))
+
+    #    grads = torch.autograd.grad(
+    #        loss,
+    #        grad_params,
+    #        create_graph=not first_order
+    #    )
+
+    #    step_sizes = {name: step_size for (name, _) in self.named_parameters()}
+    #    #step_sizes['latent_mus'] = self.latent_mus_step_size
+    #    #step_sizes['latent_sigmas'] = self.latent_sigmas_step_size
+
+    #    updated_params = OrderedDict()
+    #    for (name, param), grad in zip(named_grad_params, grads):
+    #        updated_params[name] = param - step_sizes[name] * grad
+
+    #    return updated_params
+
+
 
     #def update_params(self, loss, step_size,
     #                  latent_only=True, first_order=False):
