@@ -70,12 +70,12 @@ class MAESNNormalMLPPolicy(Policy):
         self.mu = torch.nn.Linear(layer_dims[-1], self.output_dim)
         self.sigma = torch.nn.Parameter(torch.Tensor(self.output_dim))
 
-        #self.latent_mus = torch.nn.Parameter(torch.Tensor(self.num_tasks, self.latent_dim))
-        #self.latent_sigmas = torch.nn.Parameter(torch.Tensor(self.num_tasks, self.latent_dim))
+        self.latent_mus = torch.nn.Parameter(torch.Tensor(self.num_tasks, self.latent_dim))
+        self.latent_sigmas = torch.nn.Parameter(torch.Tensor(self.num_tasks, self.latent_dim))
 
         torch.nn.init.constant_(self.sigma, np.log(init_std))
-        #torch.nn.init.normal_(self.latent_mus)
-        #torch.nn.init.constant_(self.latent_sigmas, 0)
+        torch.nn.init.normal_(self.latent_mus)
+        torch.nn.init.constant_(self.latent_sigmas, 0)
         self.apply(weight_init)
 
         #self.latent_mus_step_size = torch.nn.Parameter(torch.Tensor(1, self.latent_dim))
@@ -101,7 +101,7 @@ class MAESNNormalMLPPolicy(Policy):
     #    return torch.distributions.Normal(zeros, ones)
 
     #def forward(self, observations, latent_noise, task_ids, params=None):
-    def forward(self, observations, noise, params=None):
+    def forward(self, observations, noise, task_ids, params=None):
         """
         Perform a forward pass of MAESNNormalMLPPolicy.
 
@@ -120,15 +120,16 @@ class MAESNNormalMLPPolicy(Policy):
         params = OrderedDict(self.named_parameters()) if params is None else params
 
         # Sample noise from relevant latent spaces.
-        #latent_mus = torch.index_select(params['latent_mus'], 0, task_ids)        # [N x C_latent]
-        #latent_sigmas = torch.index_select(params['latent_sigmas'], 0, task_ids)  # [N x C_latent]
-        #latent_zs = latent_mus + latent_noise * torch.exp(latent_sigmas)          # [N x C_latent]
-        #latent_zs = latent_zs.unsqueeze(0).expand(observations.size(0), -1, -1)   # [H x N x C_latent]
+        latent_mus = torch.index_select(params['latent_mus'], 0, task_ids)        # [N x C_latent]
+        latent_sigmas = torch.index_select(params['latent_sigmas'], 0, task_ids)  # [N x C_latent]
+        zs = latent_mus + noise * torch.exp(latent_sigmas)
+
 
         # Construct noise-agumented input features.
         #latent_zs = latent_noise.unsqueeze(0).expand(observations.size(0), -1, -1)
         #output = torch.cat([observations, latent_zs], dim=-1)
-        zs = noise if observations.dim() == 2 else noise.unsqueeze(0).expand(observations.size(0), -1, -1)
+        #zs = noise if observations.dim() == 2 else noise.unsqueeze(0).expand(observations.size(0), -1, -1)
+        zs = zs if observations.dim() == 2 else zs.unsqueeze(0).expand(observations.size(0), -1, -1)
         output = torch.cat([observations, zs], dim=-1)
 
         # Pass through MLP.

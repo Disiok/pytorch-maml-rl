@@ -77,6 +77,7 @@ class MAESNMetaLearner(object):
         pi = self.policy(
             episodes.observations,
             episodes.noise,
+            episodes.task_ids,
             params=params
         )
 
@@ -165,6 +166,7 @@ class MAESNMetaLearner(object):
             pi = self.policy(
                 valid_episodes.observations,
                 valid_episodes.noise,
+                valid_episodes.task_ids,
                 params=params
             )
 
@@ -219,6 +221,7 @@ class MAESNMetaLearner(object):
                 pi = self.policy(
                     valid_episodes.observations,
                     valid_episodes.noise,
+                    valid_episodes.task_ids,
                     params=params
                 )
                 pis.append(detach_distribution(pi))

@@ -65,7 +65,7 @@ class MAESNBatchSampler(object):
         )
 
         noise_tensor = noise_distribution.sample()
-        #task_tensor = torch.tensor([self.task_id], dtype=torch.long, device=device)
+        task_tensor = torch.tensor([self.task_id], dtype=torch.long, device=device)
 
         # Construct a batch of episodes.
         episodes = MAESNBatchEpisodes(
@@ -94,12 +94,12 @@ class MAESNBatchSampler(object):
                 )
 
                 current_noise_tensor = torch.index_select(noise_tensor, 0, batch_ids_tensor)
-                #current_task_tensor = task_tensor.expand(observations_tensor.size(0))
+                current_task_tensor = task_tensor.expand(observations_tensor.size(0))
 
                 actions_distribution = policy(
                     observations_tensor,#.unsqueeze(0),
                     current_noise_tensor,
-#                    current_task_tensor,
+                    current_task_tensor,
                     params=params
                 )
                 actions_tensor = actions_distribution.sample()
