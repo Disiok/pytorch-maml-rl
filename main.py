@@ -5,6 +5,7 @@ import torch
 import json
 import logging
 import time
+import random
 
 from maml_rl.metalearner import MetaLearner
 from maml_rl.intrinsic_metalearner import IntrinsicMetaLearner
@@ -24,6 +25,10 @@ def total_rewards(episodes_rewards, aggregation=torch.mean):
     return rewards.item()
 
 def main(args):
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
     continuous_actions = (args.env_name in ['Pusher-v0', 'AntVel-v1', 'AntDir-v1',
         'AntPos-v0', 'AntGoalRing-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
         '2DNavigation-v0'])
@@ -114,6 +119,8 @@ if __name__ == '__main__':
         'Model-Agnostic Meta-Learning (MAML)')
 
     # General
+    parser.add_argument('--seed', type=int, default=1,
+        help='random seed')
     parser.add_argument('--env-name', type=str,
         help='name of the environment')
     parser.add_argument('--gamma', type=float, default=0.95,
