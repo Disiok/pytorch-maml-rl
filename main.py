@@ -68,7 +68,6 @@ def main(args):
     baseline = LinearFeatureBaseline(
         int(np.prod(sampler.envs.observation_space.shape)))
 
-
     if args.intrinsic_reward:
         metalearner = IntrinsicMetaLearner(sampler, policy, reward_policy, baseline, gamma=args.gamma,
             fast_lr=args.fast_lr, tau=args.tau, device=args.device)
