@@ -101,7 +101,7 @@ class MAESNNormalMLPPolicy(Policy):
     #    return torch.distributions.Normal(zeros, ones)
 
     #def forward(self, observations, latent_noise, task_ids, params=None):
-    def forward(self, observations, params=None):
+    def forward(self, observations, noise, params=None):
         """
         Perform a forward pass of MAESNNormalMLPPolicy.
 
@@ -128,7 +128,8 @@ class MAESNNormalMLPPolicy(Policy):
         # Construct noise-agumented input features.
         #latent_zs = latent_noise.unsqueeze(0).expand(observations.size(0), -1, -1)
         #output = torch.cat([observations, latent_zs], dim=-1)
-        output = observations
+        zs = noise if observations.dim() == 2 else noise.unsqueeze(0).expand(observations.size(0), -1, -1)
+        output = torch.cat([observations, zs], dim=-1)
 
         # Pass through MLP.
         for i in range(1, self.num_layers):

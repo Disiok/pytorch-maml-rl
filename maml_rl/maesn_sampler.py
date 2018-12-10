@@ -76,12 +76,6 @@ class MAESNBatchSampler(object):
             device=device
         )
 
-        #episodes = BatchEpisodes(
-        #    batch_size=self.batch_size,
-        #    gamma=gamma,
-        #    device=device
-        #)
-
         for i in range(self.batch_size):
             self.queue.put(i)
 
@@ -94,17 +88,17 @@ class MAESNBatchSampler(object):
         while (not all(dones)) or (not self.queue.empty()):
             with torch.no_grad():
                 observations_tensor = torch.from_numpy(observations).to(device=device)
-                #batch_ids_tensor = torch.tensor(
-                #    [bid if bid is not None else 0 for bid in batch_ids],
-                #    dtype=torch.long, device=device
-                #)
+                batch_ids_tensor = torch.tensor(
+                    [bid if bid is not None else 0 for bid in batch_ids],
+                    dtype=torch.long, device=device
+                )
 
-                #current_noise_tensor = torch.index_select(noise_tensor, 0, batch_ids_tensor)
+                current_noise_tensor = torch.index_select(noise_tensor, 0, batch_ids_tensor)
                 #current_task_tensor = task_tensor.expand(observations_tensor.size(0))
 
                 actions_distribution = policy(
                     observations_tensor,#.unsqueeze(0),
-#                    current_noise_tensor,
+                    current_noise_tensor,
 #                    current_task_tensor,
                     params=params
                 )

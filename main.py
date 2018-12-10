@@ -47,7 +47,7 @@ def main(args):
     if continuous_actions:
         policy = MAESNNormalMLPPolicy(
             int(np.prod(sampler.envs.observation_space.shape)),
-            0,
+            int(args.latent_dim),
             int(np.prod(sampler.envs.action_space.shape)),
             hidden_sizes=(args.hidden_size,) * args.num_layers)
 

@@ -76,6 +76,7 @@ class MAESNMetaLearner(object):
 
         pi = self.policy(
             episodes.observations,
+            episodes.noise,
             params=params
         )
 
@@ -163,6 +164,7 @@ class MAESNMetaLearner(object):
 
             pi = self.policy(
                 valid_episodes.observations,
+                valid_episodes.noise,
                 params=params
             )
 
@@ -216,6 +218,7 @@ class MAESNMetaLearner(object):
             with torch.set_grad_enabled(old_pi is None):
                 pi = self.policy(
                     valid_episodes.observations,
+                    valid_episodes.noise,
                     params=params
                 )
                 pis.append(detach_distribution(pi))
