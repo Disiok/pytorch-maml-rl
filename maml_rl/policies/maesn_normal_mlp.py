@@ -78,11 +78,11 @@ class MAESNNormalMLPPolicy(Policy):
         torch.nn.init.constant_(self.latent_sigmas, 0)
         self.apply(weight_init)
 
-        #self.latent_mus_step_size = torch.nn.Parameter(torch.Tensor(1, self.latent_dim))
-        #self.latent_sigmas_step_size = torch.nn.Parameter(torch.Tensor(1, self.latent_dim))
+        self.latent_mus_step_size = torch.nn.Parameter(torch.Tensor(1, self.latent_dim))
+        self.latent_sigmas_step_size = torch.nn.Parameter(torch.Tensor(1, self.latent_dim))
 
-        #torch.nn.init.constant_(self.latent_mus_step_size, default_step_size)
-        #torch.nn.init.constant_(self.latent_sigmas_step_size, default_step_size)
+        torch.nn.init.constant_(self.latent_mus_step_size, default_step_size)
+        torch.nn.init.constant_(self.latent_sigmas_step_size, default_step_size)
 
     #def latent_distribution(self, task_id):
     #    """
@@ -200,10 +200,13 @@ class MAESNNormalMLPPolicy(Policy):
         )
 
         step_sizes = {name: step_size for (name, _) in self.named_parameters()}
-        #step_sizes['latent_mus'] = self.latent_mus_step_size
-        #step_sizes['latent_sigmas'] = self.latent_sigmas_step_size
+        step_sizes['latent_mus'] = self.latent_mus_step_size
+        step_sizes['latent_sigmas'] = self.latent_sigmas_step_size
 
         updated_params = OrderedDict()
+        for (name, param) in self.named_parameters():
+            updated_params[name] = param
+
         for (name, param), grad in zip(named_grad_params, grads):
             updated_params[name] = param - step_sizes[name] * grad
 
