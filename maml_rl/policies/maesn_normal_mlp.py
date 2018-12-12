@@ -84,23 +84,24 @@ class MAESNNormalMLPPolicy(Policy):
         torch.nn.init.constant_(self.latent_mus_step_size, default_step_size)
         torch.nn.init.constant_(self.latent_sigmas_step_size, default_step_size)
 
-    #def latent_distribution(self, task_id):
-    #    """
+    def latent_distribution(self, task_id, params=None):
+        """
 
-    #    """
-    #    mu = self.latent_mus[task_id]
-    #    sigma = torch.exp(self.latent_sigmas[task_id])
-    #    return torch.distributions.Normal(mu, sigma)
+        """
+        params = OrderedDict(self.named_parameters()) if params is None else params
 
-    #def latent_prior_distribution(self):
-    #    """
+        mu = params['latent_mus'][task_id]
+        sigma = torch.exp(params['latent_sigmas'][task_id])
+        return torch.distributions.Normal(mu, sigma)
 
-    #    """
-    #    zeros = torch.zeros_like(self.latent_mus[0])
-    #    ones = torch.ones_like(self.latent_sigmas[0])
-    #    return torch.distributions.Normal(zeros, ones)
+    def latent_prior_distribution(self):
+        """
 
-    #def forward(self, observations, latent_noise, task_ids, params=None):
+        """
+        zeros = torch.zeros_like(self.latent_mus[0])
+        ones = torch.ones_like(self.latent_sigmas[0])
+        return torch.distributions.Normal(zeros, ones)
+
     def forward(self, observations, noise, task_ids, params=None):
         """
         Perform a forward pass of MAESNNormalMLPPolicy.
@@ -163,6 +164,7 @@ class MAESNNormalMLPPolicy(Policy):
 
     def update_params(self,
                       loss,
+                      latent_loss,
                       step_size=0.5,
                       first_order=False,
                       latent_only=True):
@@ -181,21 +183,29 @@ class MAESNNormalMLPPolicy(Policy):
         """
         grad_params = []
         named_grad_params = []
+        latent_grad_params = []
+        latent_named_grad_params = []
         for (name, param) in self.named_parameters():
             if (name == 'latent_mus_step_size' or
                 name == 'latent_sigmas_step_size'):
                 continue
 
-            if not latent_only:
-                grad_params.append(param)
-                named_grad_params.append((name, param))
-            elif (name == 'latent_mus' or name == 'latent_sigmas'):
+            if (name == 'latent_mus' or name == 'latent_sigmas'):
+                latent_grad_params.append(param)
+                latent_named_grad_params.append((name, param))
+            else:
                 grad_params.append(param)
                 named_grad_params.append((name, param))
 
         grads = torch.autograd.grad(
             loss,
             grad_params,
+            create_graph=not first_order
+        )
+
+        latent_grads = torch.autograd.grad(
+            latent_loss,
+            latent_grad_params,
             create_graph=not first_order
         )
 
@@ -208,6 +218,10 @@ class MAESNNormalMLPPolicy(Policy):
             updated_params[name] = param
 
         for (name, param), grad in zip(named_grad_params, grads):
+            if not latent_only:
+                updated_params[name] = param - step_sizes[name] * grad
+
+        for (name, param), grad in zip(latent_named_grad_params, latent_grads):
             updated_params[name] = param - step_sizes[name] * grad
 
         return updated_params

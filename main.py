@@ -42,12 +42,11 @@ def main(args):
         config.update(device=args.device.type)
         json.dump(config, f, indent=2)
 
-    sampler = MAESNBatchSampler(args.env_name, batch_size=args.fast_batch_size,
+    sampler = BatchSampler(args.env_name, batch_size=args.fast_batch_size,
         num_workers=args.num_workers)
     if continuous_actions:
-        policy = MAESNNormalMLPPolicy(
+        policy = NormalMLPPolicy(
             int(np.prod(sampler.envs.observation_space.shape)),
-            int(args.latent_dim),
             int(np.prod(sampler.envs.action_space.shape)),
             hidden_sizes=(args.hidden_size,) * args.num_layers)
 

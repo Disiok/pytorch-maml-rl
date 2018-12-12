@@ -6,6 +6,7 @@ import gym
 import numpy as np
 import torch
 import json
+import random
 
 from maml_rl.maesn_metalearner import MAESNMetaLearner
 from maml_rl.policies import MAESNNormalMLPPolicy
@@ -36,8 +37,11 @@ def main(args):
     """
 
     """
-    continuous_actions = (args.env_name in CONTINUOUS_ENVS)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
 
+    continuous_actions = (args.env_name in CONTINUOUS_ENVS)
     writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
     save_folder = './saves/{0}'.format(args.output_folder)
 
@@ -58,7 +62,7 @@ def main(args):
     if continuous_actions:
         policy = MAESNNormalMLPPolicy(
             int(np.prod(sampler.envs.observation_space.shape)),
-            0,#int(args.latent_dim),
+            int(args.latent_dim),
             int(np.prod(sampler.envs.action_space.shape)),
             (args.hidden_size,) * args.num_layers,
             args.meta_batch_size,
@@ -90,18 +94,27 @@ def main(args):
             ls_backtrack_ratio=args.ls_backtrack_ratio
         )
 
-        #import ipdb; ipdb.set_trace()
-
         # Tensorboard
         writer.add_scalar('total_rewards/before_update',
             total_rewards([ep.rewards for ep, _ in episodes]), batch)
         writer.add_scalar('total_rewards/after_update',
             total_rewards([ep.rewards for _, ep in episodes]), batch)
 
+        writer.add_scalar('latent_space/latent_mus_step_size',
+            policy.latent_mus_step_size.mean(), batch)
+        writer.add_scalar('latent_space/latent_sigmas_step_size',
+            policy.latent_sigmas_step_size.mean(), batch)
+
+        writer.add_scalar('latent_space/latent_mus',
+            policy.latent_mus.mean(), batch)
+        writer.add_scalar('latent_space/latent_sigmas',
+            policy.latent_sigmas.mean(), batch)
+
         # Save policy network
         save_file = os.path.join(save_folder, 'policy-{0}.pt'.format(batch))
         with open(save_file, 'wb') as f:
             torch.save(policy.state_dict(), f)
+
 
 if __name__ == '__main__':
     import argparse
@@ -109,10 +122,12 @@ if __name__ == '__main__':
     import multiprocessing as mp
 
     parser = argparse.ArgumentParser(
-        description='Meta-Reinforcement Learning with Structured Exploration'
+        description='Meta-Reinforcement Learning with Structured Exploration (MAESN)'
     )
 
     # General
+    parser.add_argument('--seed', type=int, default=1,
+        help='random seed')
     parser.add_argument('--env-name', type=str,
         help='name of the environment')
     parser.add_argument('--gamma', type=float, default=0.95,
