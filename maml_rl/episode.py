@@ -99,17 +99,17 @@ class BatchEpisodes(object):
         if self._intrinsic_rewards is None:
             self._intrinsic_rewards = self._reward_policy(torch.cat([self.observations, self.actions], dim=2), params=self._reward_policy_params).squeeze()
         return self._intrinsic_rewards
-    
+
     @property
     def intrinsic_returns(self):
         if self._intrinsic_returns is None:
             returns = [None for _ in range(len(self))]
             returns[-1] = self.intrinsic_rewards[-1] * self.mask[-1]
             for i in range(len(self) - 2, -1, -1):
-                returns[i] = self.gamma * returns[i + 1] + self.intrinsic_rewards[i] * self.mask[i] 
+                returns[i] = self.gamma * returns[i + 1] + self.intrinsic_rewards[i] * self.mask[i]
             self._intrinsic_returns = torch.stack(returns, dim=0)
         return self._intrinsic_returns
-    
+
     @property
     def mixed_rewards(self):
         if self._reward_policy is not None:
@@ -145,13 +145,13 @@ class BatchEpisodes(object):
         return advantages
 
     def append(self, observations, actions, rewards, batch_ids):
-            for observation, action, reward, batch_id in zip(
-                    observations, actions, rewards, batch_ids):
-                if batch_id is None:
-                    continue
-                self._observations_list[batch_id].append(observation.astype(np.float32))
-                self._actions_list[batch_id].append(action.astype(np.float32))
-                self._rewards_list[batch_id].append(reward.astype(np.float32))
+        for observation, action, reward, batch_id in zip(
+                observations, actions, rewards, batch_ids):
+            if batch_id is None:
+                continue
+            self._observations_list[batch_id].append(observation.astype(np.float32))
+            self._actions_list[batch_id].append(action.astype(np.float32))
+            self._rewards_list[batch_id].append(reward.astype(np.float32))
 
     def __len__(self):
         return max(map(len, self._rewards_list))

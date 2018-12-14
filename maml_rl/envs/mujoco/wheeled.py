@@ -1,5 +1,5 @@
 from IPython import embed
-import random 
+import random
 import os
 import numpy as np
 from gym import utils
@@ -32,7 +32,7 @@ class WheeledEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             return data
         elif mode == 'human':
             self._get_viewer(mode).render()
-        
+
     def reset_model(self):
         """Only task specific implementation is provided
         """
@@ -61,12 +61,12 @@ class WheeledTaskEnv(WheeledEnv):
         observation = self._get_obs()
 
         ctrl_cost = 1e-1 * 0.5 * np.sum(np.square(action))
-       
+
         if self._sparse and np.linalg.norm(observation[:2] - self._goal_pos) > 0.8 :
             reward = -np.linalg.norm(self._goal_pos) - ctrl_cost
         else:
-            reward = -np.linalg.norm(observation[:2] - self._goal_pos) - ctrl_cost 
-           
+            reward = -np.linalg.norm(observation[:2] - self._goal_pos) - ctrl_cost
+
         done = False
         infos = dict()
         return (observation, reward, done, infos)
@@ -75,14 +75,14 @@ class WheeledTaskEnv(WheeledEnv):
         if seed is not None:
             np.random.seed(seed)
 
-        radius = 2.0 
+        radius = 2.0
         angle = np.random.uniform(0, np.pi, size=(num_tasks,))
         xpos = radius * np.cos(angle)
         ypos = radius * np.sin(angle)
         positions = np.concatenate([xpos[:, None], ypos[:, None]], axis=1)
-        tasks = [{'position': position} for position in positions]
+        tasks = [{'task_id': task_id, 'position': position} for task_id, position in enumerate(positions)]
         return tasks
-        
+
     def reset_model(self):
         qpos = self.init_qpos
         qvel = self.init_qvel

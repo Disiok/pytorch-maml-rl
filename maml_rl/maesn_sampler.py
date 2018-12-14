@@ -93,13 +93,12 @@ class MAESNBatchSampler(object):
                 current_task_tensor = task_tensor.expand(observations_tensor.size(0))
 
                 actions_distribution = policy(
-                    observations_tensor,#.unsqueeze(0),
+                    observations_tensor,
                     current_noise_tensor,
                     current_task_tensor,
                     params=params
                 )
                 actions_tensor = actions_distribution.sample()
-                #actions_tensor = actions_tensor.squeeze(0)
                 actions = actions_tensor.cpu().numpy()
 
             new_observations, rewards, dones, new_batch_ids, _ = self.envs.step(actions)

@@ -112,11 +112,6 @@ class MAESNNormalMLPPolicy(Policy):
         :param params       [OrderedDict]:
         :return             [torch.distribution]: A [H x N x C_act] Normal distribution.
         """
-        # Sanity checks.
-        #assert(observations.dim() == 3)
-        #assert(latent_noise.dim() == 2)
-        #assert(task_ids.dim() == 1)
-
         # Retrieve current parameters if necessary.
         params = OrderedDict(self.named_parameters()) if params is None else params
 
@@ -125,11 +120,7 @@ class MAESNNormalMLPPolicy(Policy):
         latent_sigmas = torch.index_select(params['latent_sigmas'], 0, task_ids)  # [N x C_latent]
         zs = latent_mus + noise * torch.exp(latent_sigmas)
 
-
         # Construct noise-agumented input features.
-        #latent_zs = latent_noise.unsqueeze(0).expand(observations.size(0), -1, -1)
-        #output = torch.cat([observations, latent_zs], dim=-1)
-        #zs = noise if observations.dim() == 2 else noise.unsqueeze(0).expand(observations.size(0), -1, -1)
         zs = zs if observations.dim() == 2 else zs.unsqueeze(0).expand(observations.size(0), -1, -1)
         output = torch.cat([observations, zs], dim=-1)
 
@@ -155,12 +146,7 @@ class MAESNNormalMLPPolicy(Policy):
             min=self.min_log_std
         ))
 
-        if observations.dim() == 2:
-            sigma = sigma.view(1, -1).expand(observations.size(0), -1)
-        else:
-            sigma = sigma.view(1, 1, -1).expand(observations.size(0), observations.size(1), -1)
-
-        return torch.distributions.Normal(mu, sigma)
+        return torch.distributions.Normal(loc=mu, scale=sigma)
 
     def update_params(self,
                       loss,
@@ -185,6 +171,7 @@ class MAESNNormalMLPPolicy(Policy):
         named_grad_params = []
         latent_grad_params = []
         latent_named_grad_params = []
+
         for (name, param) in self.named_parameters():
             if (name == 'latent_mus_step_size' or
                 name == 'latent_sigmas_step_size'):
@@ -225,51 +212,3 @@ class MAESNNormalMLPPolicy(Policy):
             updated_params[name] = param - step_sizes[name] * grad
 
         return updated_params
-
-
-
-    #def update_params(self, loss, step_size,
-    #                  latent_only=True, first_order=False):
-    #    """
-
-    #    :param loss              [torch.Tensor]: The loss.
-    #    :param default_step_size [float]:        The default step size.
-    #    :param latent_only       [bool]:         Only update latent parameters.
-    #    :param first_order       [bool]:         First order approximation of gradients.
-
-    #    TODO(kwong): Add adaptive step-sizes for latent variables.
-    #    TODO(kwong): Add ability to turn off theta updates.
-    #    NOTE(kwong): Step sizes are not adapted here.
-    #    """
-    #    params, params_keys = [], []
-    #    latent_params, latent_params_keys = [], []
-    #    for (name, param) in self.named_parameters():
-    #        if name in ['latent_mus', 'latent_sigmas']:
-    #            latent_params.append(param)
-    #            latent_params_keys.append(name)
-    #        elif name not in ['latent_mus_step_size', 'latent_sigmas_step_size']:
-    #            params.append(param)
-    #            params_keys.append(name)
-
-    #    print(params_keys)
-    #    grads = torch.autograd.grad(
-    #        loss,
-    #        params,#grad_params,#self.parameters(),
-    #        create_graph=not first_order
-    #    )
-
-    #    updated_params = OrderedDict()
-    #    #for (name, param) in self.named_parameters():
-    #    #    updated_params[name] = param
-
-    #    for name, param, grad in zip(params_keys, params, grads):
-    #        updated_params[name] = param - step_size * grad
-
-    #    #updated_params['latent_mus'] = grad_params[0] - self.latent_mus_step_size * grads[0]
-    #    #updated_params['latent_sigmas'] = grad_params[1] - self.latent_sigmas_step_size * grads[1]
-
-    #    #updated_params = OrderedDict()
-    #    #for (name, param), grad in zip(self.named_parameters(), grads):
-    #    #    updated_params[name] = param - step_size * grad
-
-    #    return updated_params

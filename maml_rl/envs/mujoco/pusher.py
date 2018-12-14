@@ -1,5 +1,5 @@
 from IPython import embed
-import random 
+import random
 import os
 import numpy as np
 from gym import utils
@@ -32,7 +32,7 @@ class PusherEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             return data
         elif mode == 'human':
             self._get_viewer(mode).render()
-        
+
     def reset_model(self):
         """Only task specific implementation is provided
         """
@@ -70,11 +70,11 @@ class PusherTaskEnv(PusherEnv):
 
         block_dist = np.linalg.norm(self._goal - curr_block_pos)
         goal_dist = np.linalg.norm(self._goal)
-        
+
         if self._sparse and block_dist > 0.2:
             reward = -5 * goal_dist
         else:
-            reward = -5 * block_dist 
+            reward = -5 * block_dist
         done = False
         infos = dict()
 
@@ -83,6 +83,9 @@ class PusherTaskEnv(PusherEnv):
     def sample_tasks(self, num_tasks, seed=None):
         if seed is not None:
             np.random.seed(seed)
+
+        assert(num_tasks % 5 == 0)
+        num_tasks = int(num_tasks / 5)
 
         # TODO(suo): Clean up this code
         tasks = []
@@ -110,9 +113,12 @@ class PusherTaskEnv(PusherEnv):
                 }
                 tasks.append(curr_goal)
 
+        for task_id, task in enumerate(tasks):
+            task['task_id'] = task_id
+
         random.shuffle(tasks)
         return tasks
-        
+
     def reset_model(self):
         qpos = self._block_positions
         qvel = self.init_qvel

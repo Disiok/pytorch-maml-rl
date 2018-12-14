@@ -42,6 +42,9 @@ def main(args):
         config.update(device=args.device.type)
         json.dump(config, f, indent=2)
 
+    assert(os.path.exists(args.tasks))
+    task_distribution = torch.load(args.tasks)
+
     sampler = BatchSampler(args.env_name, batch_size=args.fast_batch_size,
         num_workers=args.num_workers)
     if continuous_actions:
@@ -76,7 +79,7 @@ def main(args):
 
     for batch in range(args.num_batches):
         start_time = time.time()
-        tasks = sampler.sample_tasks(num_tasks=args.meta_batch_size)
+        tasks = random.sample(task_distribution, args.meta_batch_size)
         task_sampling_time = time.time()
         logger.debug('Finished sampling tasks in {:.3f} seconds'.format(task_sampling_time - start_time))
 
@@ -100,7 +103,7 @@ def main(args):
         with open(os.path.join(save_folder,
                 'policy-{0}.pt'.format(batch)), 'wb') as f:
             torch.save(policy.state_dict(), f)
-        
+
         # Save intrinsic reward network
         if args.intrinsic_reward:
             with open(os.path.join(save_folder,
@@ -133,12 +136,14 @@ if __name__ == '__main__':
         help='number of hidden units per layer')
     parser.add_argument('--num-layers', type=int, default=2,
         help='number of hidden layers')
-    
+
     # Intrinsic reward network
     parser.add_argument('--intrinsic-reward', action='store_true',
         help='use intrinsic reward to provide additional supervision')
 
     # Task-specific
+    parser.add_argument('--tasks', type=str, default=None,
+        help='task distribution')
     parser.add_argument('--fast-batch-size', type=int, default=20,
         help='batch size for each individual task')
     parser.add_argument('--fast-lr', type=float, default=0.5,

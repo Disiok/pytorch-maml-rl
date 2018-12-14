@@ -19,7 +19,7 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             lb, ub = self.action_space.low, self.action_space.high
             self._action_scaling = 0.5 * (ub - lb)
         return self._action_scaling
-    
+
     def step(self, a):
         xposbefore = self.get_body_com("torso")[0]
         self.do_simulation(a, self.frame_skip)
@@ -255,13 +255,13 @@ class AntGoalRingEnv(AntPosEnv):
     def __init__(self, task={}, sparse=False):
         self._sparse = sparse
         super(AntGoalRingEnv, self).__init__(task)
-    
+
     def step(self, action):
         self.do_simulation(action, self.frame_skip)
         xyposafter = self.get_body_com("torso")[:2]
 
         if self._sparse and np.linalg.norm(xyposafter - self._goal_pos) > 0.8:
-            goal_reward = -np.sum(np.abs(self._goal_pos)) + 4.0 
+            goal_reward = -np.sum(np.abs(self._goal_pos)) + 4.0
         else:
             goal_reward = -np.sum(np.abs(xyposafter - self._goal_pos)) + 4.0
         survive_reward = 0.05
@@ -280,7 +280,7 @@ class AntGoalRingEnv(AntPosEnv):
             reward_contact=-contact_cost, reward_survive=survive_reward,
             task=self._task)
         return (observation, reward, done, infos)
-    
+
     def sample_tasks(self, num_tasks, radius=2.0, seed=None):
         if seed is not None:
             np.random.seed(seed)
@@ -288,5 +288,5 @@ class AntGoalRingEnv(AntPosEnv):
         xpos = radius * np.cos(angle)
         ypos = radius * np.sin(angle)
         positions = np.concatenate([xpos[:, None], ypos[:, None]], axis=1)
-        tasks = [{'position': position} for position in positions]
+        tasks = [{'task_id': task_id, 'position': position} for task_id, position in enumerate(positions)]
         return tasks

@@ -15,14 +15,18 @@ from maml_rl.maesn_sampler import MAESNBatchSampler
 
 from tensorboardX import SummaryWriter
 
+
 CONTINUOUS_ENVS = [
+    'Pusher-v0',
     'AntVel-v1',
     'AntDir-v1',
     'AntPos-v0',
+    'AntGoalRing-v0',
     'HalfCheetahVel-v1',
     'HalfCheetahDir-v1',
     '2DNavigation-v0',
 ]
+
 
 def total_rewards(episodes_rewards, aggregation=torch.mean):
     """
@@ -53,6 +57,9 @@ def main(args):
         config.update(device=args.device.type)
         json.dump(config, f, indent=2)
 
+    assert(os.path.exists(args.tasks))
+    task_distribution = torch.load(args.tasks)
+
     sampler = MAESNBatchSampler(
         args.env_name,
         batch_size=args.fast_batch_size,
@@ -65,7 +72,7 @@ def main(args):
             int(args.latent_dim),
             int(np.prod(sampler.envs.action_space.shape)),
             (args.hidden_size,) * args.num_layers,
-            args.meta_batch_size,
+            len(task_distribution),
             default_step_size=args.fast_lr
         )
     else:
@@ -82,7 +89,7 @@ def main(args):
     )
 
     for batch in range(args.num_batches):
-        tasks = sampler.sample_tasks(num_tasks=args.meta_batch_size)
+        tasks = random.sample(task_distribution, args.meta_batch_size)
         episodes = metalearner.sample(tasks, first_order=args.first_order)
 
         metalearner.step(
@@ -146,6 +153,8 @@ if __name__ == '__main__':
         help='dimension of the latent space')
 
     # Task-specific
+    parser.add_argument('--tasks', type=str, default=None,
+        help='task distribution')
     parser.add_argument('--fast-batch-size', type=int, default=20,
         help='batch size for each individual task')
     parser.add_argument('--fast-lr', type=float, default=0.5,
