@@ -23,6 +23,7 @@ class MAESNNormalMLPPolicy(Policy):
                  init_std=1.0,
                  min_std=1e-6,
                  default_step_size=0.5,
+                 evaluate_mode=False,
                  nonlinearity=torch.nn.functional.relu):
         """
         Initialization.
@@ -74,15 +75,32 @@ class MAESNNormalMLPPolicy(Policy):
         self.latent_sigmas = torch.nn.Parameter(torch.Tensor(self.num_tasks, self.latent_dim))
 
         torch.nn.init.constant_(self.sigma, np.log(init_std))
-        torch.nn.init.normal_(self.latent_mus)
-        torch.nn.init.constant_(self.latent_sigmas, 0)
         self.apply(weight_init)
+
+        if not evaluate_mode:
+            torch.nn.init.normal_(self.latent_mus)
+            torch.nn.init.constant_(self.latent_sigmas, 0)
+        else:
+            torch.nn.init.constant_(self.latent_mus, 0)
+            torch.nn.init.constant_(self.latent_sigmas, 0)
 
         self.latent_mus_step_size = torch.nn.Parameter(torch.Tensor(1, self.latent_dim))
         self.latent_sigmas_step_size = torch.nn.Parameter(torch.Tensor(1, self.latent_dim))
 
         torch.nn.init.constant_(self.latent_mus_step_size, default_step_size)
         torch.nn.init.constant_(self.latent_sigmas_step_size, default_step_size)
+
+    def load_state_dict(self, state_dict, strict=True):
+        """
+        Load state dict.
+
+        """
+        for (name, param) in self.named_parameters():
+            if (name == 'latent_mus') or (name == 'latent_sigmas'):
+                continue
+
+            with torch.no_grad():
+                param.data = state_dict[name].data
 
     def latent_distribution(self, task_id, params=None):
         """

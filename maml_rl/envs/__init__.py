@@ -79,6 +79,27 @@ register(
     max_episode_steps=200
 )
 
+register(
+    'SparsePusher-v0',
+    entry_point='maml_rl.envs.utils:mujoco_wrapper',
+    kwargs={'entry_point': 'maml_rl.envs.mujoco.pusher:PusherTaskEnv', 'sparse': True},
+    max_episode_steps=200
+)
+
+register(
+    'SparseAntGoalRing-v0',
+    entry_point='maml_rl.envs.utils:mujoco_wrapper',
+    kwargs={'entry_point': 'maml_rl.envs.mujoco.ant:AntGoalRingEnv', 'sparse': True},
+    max_episode_steps=200
+)
+
+register(
+    'SparseWheeled-v0',
+    entry_point='maml_rl.envs.utils:mujoco_wrapper',
+    kwargs={'entry_point': 'maml_rl.envs.mujoco.wheeled:WheeledTaskEnv', 'sparse': True},
+    max_episode_steps=200
+)
+
 # 2D Navigation
 # ----------------------------------------
 

@@ -19,6 +19,26 @@ from tensorboardX import SummaryWriter
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+CONTINUOUS_ENVS = [
+    # MAML environments
+    'Pusher-v0',
+    'AntVel-v1',
+    'AntDir-v1',
+    'AntPos-v0',
+    'HalfCheetahVel-v1',
+    'HalfCheetahDir-v1',
+
+    # MAESN dense environments
+    'AntGoalRing-v0',
+    'Wheeled-v0'
+    '2DNavigation-v0',
+
+    # MAESN sparse environments
+    'SparseAntGoalRing-v0',
+    'SparseWheeled-v0'
+    'Sparse2DNavigation-v0',
+]
+
 def total_rewards(episodes_rewards, aggregation=torch.mean):
     rewards = torch.mean(torch.stack([aggregation(torch.sum(rewards, dim=0))
         for rewards in episodes_rewards], dim=0))
@@ -29,21 +49,20 @@ def main(args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    continuous_actions = (args.env_name in ['Pusher-v0', 'AntVel-v1', 'AntDir-v1',
-        'AntPos-v0', 'AntGoalRing-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
-        '2DNavigation-v0'])
+    continuous_actions = (args.env_name in CONTINUOUS_ENVS)
+    writer = SummaryWriter(os.path.join(args.out, 'logs'))
+    save_folder = os.path.join(args.out, 'saves')
 
-    writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
-    save_folder = './saves/{0}'.format(args.output_folder)
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
+
     with open(os.path.join(save_folder, 'config.json'), 'w') as f:
         config = {k: v for (k, v) in vars(args).items() if k != 'device'}
         config.update(device=args.device.type)
         json.dump(config, f, indent=2)
 
     assert(os.path.exists(args.tasks))
-    task_distribution = torch.load(args.tasks)
+    task_distribution = normalize_task_ids(torch.load(args.tasks))
 
     sampler = BatchSampler(args.env_name, batch_size=args.fast_batch_size,
         num_workers=args.num_workers)
@@ -166,7 +185,7 @@ if __name__ == '__main__':
         help='maximum number of iterations for line search')
 
     # Miscellaneous
-    parser.add_argument('--output-folder', type=str, default='maml',
+    parser.add_argument('--out', type=str, default='maml',
         help='name of the output folder')
     parser.add_argument('--num-workers', type=int, default=mp.cpu_count() - 1,
         help='number of workers for trajectories sampling')
@@ -174,12 +193,13 @@ if __name__ == '__main__':
         help='set the device (cpu or cuda)')
 
     args = parser.parse_args()
+    print(args)
 
     # Create logs and saves folder if they don't exist
-    if not os.path.exists('./logs'):
-        os.makedirs('./logs')
-    if not os.path.exists('./saves'):
-        os.makedirs('./saves')
+    args.out = os.path.expanduser(args.out)
+    if not os.path.exists(args.out):
+        os.makedirs(args.out)
+
     # Device
     args.device = torch.device(args.device
         if torch.cuda.is_available() else 'cpu')
