@@ -17,7 +17,9 @@ from maml_rl.static_intrinsic_sampler import StaticIntrinsicBatchSampler
 from maml_rl.static_intrinsic_metalearner import StaticIntrinsicMetaLearner
 
 from tensorboardX import SummaryWriter
-
+from torch.nn.utils.convert_parameters import (
+    vector_to_parameters, parameters_to_vector
+)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -87,7 +89,7 @@ def main(args):
         json.dump(config, f, indent=2)
 
     assert(os.path.exists(args.tasks))
-    task_distribution = normalize_task_ids(torch.load(args.tasks))[0:1]
+    task_distribution = normalize_task_ids(torch.load(args.tasks))
 
     sampler = StaticIntrinsicBatchSampler(
         args.env_name,
@@ -128,8 +130,30 @@ def main(args):
         episodes = metalearner.sample(tasks, first_order=args.first_order)
         logger.debug('Finished sampling episodes in {:.3f} seconds.'.format(time.time() - start))
 
+        writer.add_scalar(
+            'intrinsic_rewards/before_update',
+            total_rewards([ep.intrinsic_rewards(reward) for ep, _ in episodes]),
+            batch
+        )
+        writer.add_scalar(
+            'intrinsic_rewards/after_update',
+            total_rewards([ep.intrinsic_rewards(reward) for _, ep in episodes]),
+            batch
+        )
+
+        writer.add_scalar(
+            'mixed_rewards/before_update',
+            total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for ep, _ in episodes]),
+            batch
+        )
+        writer.add_scalar(
+            'mixed_rewards/after_update',
+            total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for _, ep in episodes]),
+            batch
+        )
+
         start = time.time()
-        metalearner.step(
+        policy_step, reward_step = metalearner.step(
             episodes,
             max_kl=args.max_kl,
             cg_iters=args.cg_iters,
@@ -144,6 +168,29 @@ def main(args):
             total_rewards([ep.rewards for ep, _ in episodes]), batch)
         writer.add_scalar('total_rewards/after_update',
             total_rewards([ep.rewards for _, ep in episodes]), batch)
+
+        for name, param in reward.named_parameters():
+            writer.add_histogram('reward/' + name, param.detach().cpu().numpy(), batch)
+
+        for name, param in policy.named_parameters():
+            writer.add_histogram('policy/' + name, param.detach().cpu().numpy(), batch)
+
+        policy_parameters = []
+        for (name, param) in policy.named_parameters():
+            policy_parameters.append(param.clone())
+
+        reward_parameters = []
+        for (name, param) in reward.named_parameters():
+            reward_parameters.append(param.clone())
+
+        vector_to_parameters(policy_step.detach(), policy_parameters)
+        vector_to_parameters(reward_step.detach(), reward_parameters)
+
+        for (name, param), grad in zip(reward.named_parameters(), reward_parameters):
+            writer.add_histogram('reward_grad/' + name, grad.detach().cpu().numpy(), batch)
+
+        for (name, param), grad in zip(policy.named_parameters(), policy_parameters):
+            writer.add_histogram('policy_grad/' + name, grad.detach().cpu().numpy(), batch)
 
         # Save policy network
         save_file = os.path.join(save_folder, 'policy-{0}.pt'.format(batch))
@@ -170,7 +217,7 @@ if __name__ == '__main__':
         help='random seed')
     parser.add_argument('--env-name', type=str,
         help='name of the environment')
-    parser.add_argument('--gamma', type=float, default=0.95,
+    parser.add_argument('--gamma', type=float, default=0.99,
         help='value of the discount factor gamma')
     parser.add_argument('--tau', type=float, default=1.0,
         help='value of the discount factor for GAE')
@@ -194,7 +241,7 @@ if __name__ == '__main__':
         help='learning rate for the 1-step gradient update of MAML')
 
     # Optimization
-    parser.add_argument('--num-batches', type=int, default=200,
+    parser.add_argument('--num-batches', type=int, default=500,
         help='number of batches')
     parser.add_argument('--meta-batch-size', type=int, default=40,
         help='number of tasks per batch')

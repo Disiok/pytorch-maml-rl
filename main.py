@@ -44,6 +44,18 @@ def total_rewards(episodes_rewards, aggregation=torch.mean):
         for rewards in episodes_rewards], dim=0))
     return rewards.item()
 
+def normalize_task_ids(task_distribution):
+    """
+    Normalize task ids.
+
+    :param task_distribution [list<dict>]: A list of task configurations.
+    :return                  [list<dict>]: A list of task configurations.
+    """
+    task_distribution = sorted(task_distribution, key=lambda t: t['task_id'])
+    for task_id, task in enumerate(task_distribution):
+        task['task_id'] = task_id
+    return task_distribution
+
 def main(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -143,7 +155,7 @@ if __name__ == '__main__':
         help='random seed')
     parser.add_argument('--env-name', type=str,
         help='name of the environment')
-    parser.add_argument('--gamma', type=float, default=0.95,
+    parser.add_argument('--gamma', type=float, default=0.99,
         help='value of the discount factor gamma')
     parser.add_argument('--tau', type=float, default=1.0,
         help='value of the discount factor for GAE')
@@ -169,7 +181,7 @@ if __name__ == '__main__':
         help='learning rate for the 1-step gradient update of MAML')
 
     # Optimization
-    parser.add_argument('--num-batches', type=int, default=200,
+    parser.add_argument('--num-batches', type=int, default=500,
         help='number of batches')
     parser.add_argument('--meta-batch-size', type=int, default=40,
         help='number of tasks per batch')

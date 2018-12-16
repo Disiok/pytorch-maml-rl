@@ -70,7 +70,6 @@ class StaticIntrinsicMetaLearner(object):
         advantage estimates with Generalized Advantage Estimates [3].
 
         :param episodes      [MAESNBatchEpisode]:
-        :param use_intrinsic [bool]:
         :param params        [OrderedDict]:
         """
         # Note: we assume that the baseline is already
@@ -303,7 +302,7 @@ class StaticIntrinsicMetaLearner(object):
 
         """
         # Update policy network.
-        self.step_function(
+        policy_step = self.step_function(
             self.policy,
             episodes,
             max_kl=max_kl,
@@ -315,7 +314,7 @@ class StaticIntrinsicMetaLearner(object):
         )
 
         # Update reward network.
-        self.step_function(
+        reward_step = self.step_function(
             self.reward,
             episodes,
             max_kl=max_kl,
@@ -325,6 +324,8 @@ class StaticIntrinsicMetaLearner(object):
             ls_backtrack_ratio=ls_backtrack_ratio,
             use_intrinsic=False
         )
+
+        return policy_step, reward_step
 
     def step_function(self,
                       function,
@@ -380,7 +381,10 @@ class StaticIntrinsicMetaLearner(object):
 
             step_size *= ls_backtrack_ratio
         else:
+            step_size = 0
             vector_to_parameters(old_params, function.parameters())
+
+        return step_size * step
 
     def to(self, device, **kwargs):
         """
