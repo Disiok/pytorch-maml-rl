@@ -12,6 +12,7 @@ from maml_rl.maesn_sampler import MAESNBatchSampler
 
 
 CONTINUOUS_ENVS = [
+    'Wheeled-v0',
     'Pusher-v0',
     'AntVel-v1',
     'AntDir-v1',
