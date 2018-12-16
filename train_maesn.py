@@ -15,20 +15,13 @@ from maml_rl.maesn_metalearner import MAESNMetaLearner
 from maml_rl.policies import MAESNNormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.maesn_sampler import MAESNBatchSampler
-from maml_rl.utils import pytorch_utils
+from maml_rl.utils import pytorch_utils, task_utils
 
 from tensorboardX import SummaryWriter
 
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-
-def normalize_task_ids(task_distribution):
-    task_distribution = sorted(task_distribution, key=lambda t: t['task_id'])
-    for task_id, task in enumerate(task_distribution):
-        task['task_id'] = task_id
-    return task_distribution
 
 
 def main(args):
@@ -52,7 +45,7 @@ def main(args):
         json.dump(config, f, indent=2)
 
     assert(os.path.exists(args.tasks))
-    task_distribution = normalize_task_ids(torch.load(args.tasks))
+    task_distribution = task_utils.normalize_task_ids(torch.load(args.tasks))
 
     sampler = MAESNBatchSampler(
         args.env_name,

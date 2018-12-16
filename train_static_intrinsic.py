@@ -11,11 +11,11 @@ import logging
 import numpy as np
 
 from maml_rl.envs import CONTINUOUS_ENVS
-from maml_rl.reward import IntrinsicReward
-from maml_rl.policies import NormalMLPPolicy
+from maml_rl.policies import NormalMLPPolicy, IntrinsicReward
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.static_intrinsic_sampler import StaticIntrinsicBatchSampler
 from maml_rl.static_intrinsic_metalearner import StaticIntrinsicMetaLearner
+from maml_rl.utils import torch_utils
 
 from tensorboardX import SummaryWriter
 from torch.nn.utils.convert_parameters import (
@@ -24,15 +24,6 @@ from torch.nn.utils.convert_parameters import (
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-
-def total_rewards(episodes_rewards, aggregation=torch.mean):
-    """
-
-    """
-    rewards = torch.mean(torch.stack([aggregation(torch.sum(rewards, dim=0))
-        for rewards in episodes_rewards], dim=0))
-    return rewards.item()
 
 
 def normalize_task_ids(task_distribution):
@@ -113,23 +104,23 @@ def main(args):
 
         writer.add_scalar(
             'intrinsic_rewards/before_update',
-            total_rewards([ep.intrinsic_rewards(reward) for ep, _ in episodes]),
+            torch_utils.total_rewards([ep.intrinsic_rewards(reward) for ep, _ in episodes]),
             batch
         )
         writer.add_scalar(
             'intrinsic_rewards/after_update',
-            total_rewards([ep.intrinsic_rewards(reward) for _, ep in episodes]),
+            torch_utils.total_rewards([ep.intrinsic_rewards(reward) for _, ep in episodes]),
             batch
         )
 
         writer.add_scalar(
             'mixed_rewards/before_update',
-            total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for ep, _ in episodes]),
+            torch_utils.total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for ep, _ in episodes]),
             batch
         )
         writer.add_scalar(
             'mixed_rewards/after_update',
-            total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for _, ep in episodes]),
+            torch_utils.total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for _, ep in episodes]),
             batch
         )
 
@@ -146,9 +137,9 @@ def main(args):
 
         # Tensorboard
         writer.add_scalar('total_rewards/before_update',
-            total_rewards([ep.rewards for ep, _ in episodes]), batch)
+            torch_utils.total_rewards([ep.rewards for ep, _ in episodes]), batch)
         writer.add_scalar('total_rewards/after_update',
-            total_rewards([ep.rewards for _, ep in episodes]), batch)
+            torch_utils.total_rewards([ep.rewards for _, ep in episodes]), batch)
 
         for name, param in reward.named_parameters():
             writer.add_histogram('reward/' + name, param.detach().cpu().numpy(), batch)

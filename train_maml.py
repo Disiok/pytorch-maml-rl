@@ -13,24 +13,12 @@ from maml_rl.intrinsic_metalearner import IntrinsicMetaLearner
 from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
-from maml_rl.utils import torch_utils
+from maml_rl.utils import torch_utils, task_utils
 
 from tensorboardX import SummaryWriter
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-def normalize_task_ids(task_distribution):
-    """
-    Normalize task ids.
-
-    :param task_distribution [list<dict>]: A list of task configurations.
-    :return                  [list<dict>]: A list of task configurations.
-    """
-    task_distribution = sorted(task_distribution, key=lambda t: t['task_id'])
-    for task_id, task in enumerate(task_distribution):
-        task['task_id'] = task_id
-    return task_distribution
 
 def main(args):
     random.seed(args.seed)
@@ -50,7 +38,7 @@ def main(args):
         json.dump(config, f, indent=2)
 
     assert(os.path.exists(args.tasks))
-    task_distribution = normalize_task_ids(torch.load(args.tasks))
+    task_distribution = task_utils.normalize_task_ids(torch.load(args.tasks))
 
     sampler = BatchSampler(args.env_name, batch_size=args.fast_batch_size,
         num_workers=args.num_workers)

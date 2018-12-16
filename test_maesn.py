@@ -17,6 +17,7 @@ from maml_rl.maesn_metalearner import MAESNMetaLearner
 from maml_rl.policies import MAESNNormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.maesn_sampler import MAESNBatchSampler
+from maml_rl.utils import torch_utils, task_utils
 
 from torch.nn.utils.convert_parameters import (
     vector_to_parameters, parameters_to_vector
@@ -27,19 +28,6 @@ from tensorboardX import SummaryWriter
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-
-def total_rewards(episodes_rewards, aggregation=torch.mean):
-    rewards = torch.mean(torch.stack([aggregation(torch.sum(rewards, dim=0))
-        for rewards in episodes_rewards], dim=0))
-    return rewards.item()
-
-
-def normalize_task_ids(task_distribution):
-    task_distribution = sorted(task_distribution, key=lambda t: t['task_id'])
-    for task_id, task in enumerate(task_distribution):
-        task['task_id'] = task_id
-    return task_distribution
 
 
 def main(args):
@@ -63,7 +51,7 @@ def main(args):
         json.dump(config, f, indent=2)
 
     assert(os.path.exists(args.tasks))
-    task_distribution = normalize_task_ids(torch.load(args.tasks))
+    task_distribution = task_utils.normalize_task_ids(torch.load(args.tasks))
 
     assert(os.path.exists(args.checkpoint))
     checkpoint = torch.load(args.checkpoint)
