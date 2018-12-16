@@ -1,9 +1,7 @@
 #
 #
 #
-
 import maml_rl.envs
-
 import gym
 import json
 import time
@@ -12,14 +10,10 @@ import random
 import logging
 import numpy as np
 
-from maml_rl.maesn_metalearner import MAESNMetaLearner
-from maml_rl.policies import MAESNNormalMLPPolicy
+from maml_rl.policies import NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
-from maml_rl.maesn_sampler import MAESNBatchSampler
-
-from torch.nn.utils.convert_parameters import (
-    vector_to_parameters, parameters_to_vector
-)
+from maml_rl.static_intrinsic_sampler import StaticIntrinsicBatchSampler
+from maml_rl.static_intrinsic_metalearner import StaticIntrinsicMetaLearner
 
 from tensorboardX import SummaryWriter
 
@@ -50,12 +44,21 @@ CONTINUOUS_ENVS = [
 
 
 def total_rewards(episodes_rewards, aggregation=torch.mean):
+    """
+
+    """
     rewards = torch.mean(torch.stack([aggregation(torch.sum(rewards, dim=0))
         for rewards in episodes_rewards], dim=0))
     return rewards.item()
 
 
 def normalize_task_ids(task_distribution):
+    """
+    Normalize task ids.
+
+    :param task_distribution [list<dict>]: A list of task configurations.
+    :return                  [list<dict>]: A list of task configurations.
+    """
     task_distribution = sorted(task_distribution, key=lambda t: t['task_id'])
     for task_id, task in enumerate(task_distribution):
         task['task_id'] = task_id
@@ -71,7 +74,7 @@ def main(args):
     torch.manual_seed(args.seed)
 
     continuous_actions = (args.env_name in CONTINUOUS_ENVS)
-    writer_path = os.path.join(args.out, 'logs')
+    writer = SummaryWriter(os.path.join(args.out, 'logs'))
     save_folder = os.path.join(args.out, 'saves')
 
     if not os.path.exists(save_folder):
@@ -85,123 +88,77 @@ def main(args):
     assert(os.path.exists(args.tasks))
     task_distribution = normalize_task_ids(torch.load(args.tasks))
 
-    assert(os.path.exists(args.checkpoint))
-    checkpoint = torch.load(args.checkpoint)
-
-    sampler = MAESNBatchSampler(
+    sampler = StaticIntrinsicBatchSampler(
         args.env_name,
         batch_size=args.fast_batch_size,
         num_workers=args.num_workers
     )
 
+    if continuous_actions:
+        policy = NormalMLPPolicy(
+            int(np.prod(sampler.envs.observation_space.shape)),
+            int(np.prod(sampler.envs.action_space.shape)),
+            (args.hidden_size,) * args.num_layers
+        )
+        reward = IntrinsicReward(
+            int(np.prod(ç))
+        )
+    else:
+        raise NotImplementedError
+
     baseline = LinearFeatureBaseline(
         int(np.prod(sampler.envs.observation_space.shape))
     )
 
-    task_rewards = {}
-    for i, task in enumerate(task_distribution):
-        writer = SummaryWriter(os.path.join(writer_path, str(task['task_id'])))
+    metalearner = MAESNMetaLearner(
+        sampler, policy, baseline,
+        gamma=args.gamma, fast_lr=args.fast_lr,
+        tau=args.tau, device=args.device
+    )
 
-        if continuous_actions:
-            policy = MAESNNormalMLPPolicy(
-                int(np.prod(sampler.envs.observation_space.shape)),
-                int(args.latent_dim),
-                int(np.prod(sampler.envs.action_space.shape)),
-                (args.hidden_size,) * args.num_layers,
-                len(task_distribution),
-                default_step_size=args.fast_lr,
-                evaluate_mode=True
-            )
-            policy.load_state_dict(checkpoint)
-        else:
-            raise NotImplementedError
+    for batch in range(args.num_batches):
+        start = time.time()
+        tasks = random.sample(task_distribution, args.meta_batch_size)
+        logger.debug('Finished sampling tasks in {:.3f} seconds.'.format(time.time() - start))
 
-        metalearner = MAESNMetaLearner(
-            sampler, policy, baseline,
-            gamma=args.gamma, fast_lr=args.fast_lr,
-            tau=args.tau, device=args.device
+        start = time.time()
+        episodes = metalearner.sample(tasks, first_order=args.first_order)
+        logger.debug('Finished sampling episodes in {:.3f} seconds.'.format(time.time() - start))
+
+        start = time.time()
+        metalearner.step(
+            episodes,
+            max_kl=args.max_kl,
+            cg_iters=args.cg_iters,
+            cg_damping=args.cg_damping,
+            ls_max_steps=args.ls_max_steps,
+            ls_backtrack_ratio=args.ls_backtrack_ratio
         )
+        logger.debug('Finished metalearner step in {:.3f} seconds.'.format(time.time() - start))
 
-        for batch in range(args.num_batches):
-            start = time.time()
-            sampler.reset_task(task)
-            episodes = sampler.sample(
-                policy,
-                gamma=args.gamma,
-                device=args.device
-            )
-            logger.debug('Finished sampling episodes in {:.3f} seconds.'.format(time.time() - start))
+        # Tensorboard
+        writer.add_scalar('total_rewards/before_update',
+            total_rewards([ep.rewards for ep, _ in episodes]), batch)
+        writer.add_scalar('total_rewards/after_update',
+            total_rewards([ep.rewards for _, ep in episodes]), batch)
 
-            start = time.time()
-            params = metalearner.adapt(episodes)
-            policy.set_parameters(params)
-            logger.debug('Finished adaptation step in {:.3f} seconds.'.format(time.time() - start))
+        writer.add_scalar('latent_space/latent_mus_step_size',
+            policy.latent_mus_step_size.mean(), batch)
+        writer.add_scalar('latent_space/latent_sigmas_step_size',
+            policy.latent_sigmas_step_size.mean(), batch)
 
-            if not task['task_id'] in task_rewards:
-                task_rewards[task['task_id']] = []
+        writer.add_scalar('latent_space/latent_mus',
+            policy.latent_mus.mean(), batch)
+        writer.add_scalar('latent_space/latent_sigmas',
+            policy.latent_sigmas.mean(), batch)
 
-            rewards = total_rewards([episodes.rewards])
-            task_rewards[task['task_id']].append(rewards)
-
-            # Tensorboard
-            writer.add_scalar(
-                'meta-test/total_rewards',
-                rewards,
-                batch
-            )
-
-            writer.add_scalar(
-                'meta-test/latent_mus_step_size',
-                policy.latent_mus_step_size.mean(),
-                batch
-            )
-            writer.add_scalar(
-                'meta-test/latent_sigmas_step_size',
-                policy.latent_sigmas_step_size.mean(),
-                batch
-            )
-
-            latent_distribution = policy.latent_distribution(episodes.task_id)
-            writer.add_scalar(
-                'meta-test/latent_mus',
-                latent_distribution.loc.mean(),
-                batch
-            )
-            writer.add_scalar(
-                'meta-test/latent_sigmas',
-                latent_distribution.scale.mean(),
-                batch
-            )
-
-        out = 'policy-{0}.pth.tar'.format(task['task_id'])
-        with open(os.path.join(save_folder, out), 'wb') as f:
+        # Save policy network
+        save_file = os.path.join(save_folder, 'policy-{0}.pt'.format(batch))
+        with open(save_file, 'wb') as f:
             torch.save(policy.state_dict(), f)
-
-        logger.debug('Saved policy for task {0} to {1}.'.format(
-            task['task_id'], os.path.join(save_folder, out)
-        ))
-
-    # Tensorboard
-    writer = SummaryWriter(os.path.join(writer_path, 'aggregate'))
-
-    average_rewards = [0.] * args.num_batches
-    for i in range(args.num_batches):
-        for task in task_distribution:
-            average_rewards[i] += task_rewards[task['task_id']][i] # something is wrong here.
-
-    average_rewards = [r / len(task_distribution) for r in average_rewards]
-    for i, rewards in enumerate(average_rewards):
-        writer.add_scalar(
-            'meta-test/total_rewards',
-            rewards,
-            i
-        )
 
 
 if __name__ == '__main__':
-    """
-
-    """
     import argparse
     import os
     import multiprocessing as mp
@@ -219,16 +176,16 @@ if __name__ == '__main__':
         help='value of the discount factor gamma')
     parser.add_argument('--tau', type=float, default=1.0,
         help='value of the discount factor for GAE')
+    parser.add_argument('--intrinsic-weight', type=float, default=1.0,
+        help='weight of intrinsic rewards')
+    parser.add_argument('--first-order', action='store_true',
+        help='use the first-order approximation of MAML')
 
     # Policy network (relu activation function)
-    parser.add_argument('--checkpoint', type=str, default=None,
-        help='model checkpoint')
     parser.add_argument('--hidden-size', type=int, default=100,
         help='number of hidden units per layer')
     parser.add_argument('--num-layers', type=int, default=2,
         help='number of hidden layers')
-    parser.add_argument('--latent-dim', type=int, default=2,
-        help='dimension of the latent space')
 
     # Task-specific
     parser.add_argument('--tasks', type=str, default=None,
@@ -241,6 +198,18 @@ if __name__ == '__main__':
     # Optimization
     parser.add_argument('--num-batches', type=int, default=200,
         help='number of batches')
+    parser.add_argument('--meta-batch-size', type=int, default=40,
+        help='number of tasks per batch')
+    parser.add_argument('--max-kl', type=float, default=1e-2,
+        help='maximum value for the KL constraint in TRPO')
+    parser.add_argument('--cg-iters', type=int, default=10,
+        help='number of iterations of conjugate gradient')
+    parser.add_argument('--cg-damping', type=float, default=1e-5,
+        help='damping in conjugate gradient')
+    parser.add_argument('--ls-max-steps', type=int, default=15,
+        help='maximum number of iterations for line search')
+    parser.add_argument('--ls-backtrack-ratio', type=float, default=0.8,
+        help='maximum number of iterations for line search')
 
     # Miscellaneous
     parser.add_argument('--out', type=str, default='maml',
@@ -251,6 +220,7 @@ if __name__ == '__main__':
         help='set the device (cpu or cuda)')
 
     args = parser.parse_args()
+    print(args)
 
     # Create logs and saves folder if they don't exist
     args.out = os.path.expanduser(args.out)

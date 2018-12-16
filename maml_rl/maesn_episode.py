@@ -136,20 +136,54 @@ class MAESNBatchEpisodes(object):
             self._mask = torch.from_numpy(mask).to(self.device)
         return self._mask
 
-    def gae(self, values, tau=1.0):
+    def intrinsic_rewards(self, intrinsic):
+        """
+
+        """
+        if intrinsic is None:
+            return 0
+
+        features = torch.cat([
+            self.observations,
+            self.actions,
+        ], dim=2)
+
+        intrinsic_rewards = intrinsic(features).squeeze(-1)
+        return intrinsic_rewards
+
+    def intrinsic_returns(self, intrinsic):
+        """
+
+        """
+        if intrinsic is None:
+            return 0
+
+        returns = [None] * len(self)
+        intrinsic_rewards = self.intrinsic_rewards(intrinsic)
+
+        returns[-1] = intrinsic_rewards[-1] * self.mask[-1]
+        for i in range(len(self) - 2, -1, -1):
+            returns[i] = self.gamma * returns[i + 1] + intrinsic_rewards[i] * self.mask[i]
+
+        intrinsic_returns = torch.stack(returns, dim=0)
+        return intrinsic_returns
+
+    def gae(self, values, intrinsic=None, tau=1.0):
         """
         Compute the Generalized Advantage Estimate.
 
-        :param values [torch.Tensor]: A [H x N x 1] value tensor.
-        :param tau    [float]:        The lambda/tau factor.
-        :return       [torch.Tensor]: A [H x N] advantage tensor.
+        :param values    [torch.Tensor]:    A [H x N x 1] value tensor.
+        :param intrinsic [torch.nn.Module]:
+        :param tau       [float]:           The lambda/tau factor.
+        :return          [torch.Tensor]:    A [H x N] advantage tensor.
         """
         # Add an additional 0 at the end of values for
         # the estimation at the end of the episode
         values = values.squeeze(2).detach()
         values = torch.nn.functional.pad(values * self.mask, (0, 0, 0, 1))
 
-        deltas = self.rewards + self.gamma * values[1:] - values[:-1]
+        mixed_rewards = self.rewards + self.intrinsic_rewards(intrinsic)
+        deltas = mixed_rewards + self.gamma * values[1:] - values[:-1]
         advantages = torch.zeros_like(deltas).float()
         gae = torch.zeros_like(deltas[0]).float()
         for i in range(len(self) - 1, -1, -1):
