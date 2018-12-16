@@ -106,17 +106,19 @@ def main(args):
         episode_sampling_time = time.time()
         logger.debug('Finished sampling episodes in {:.3f} seconds'.format(episode_sampling_time - task_sampling_time))
 
-        metalearner.step(episodes, max_kl=args.max_kl, cg_iters=args.cg_iters,
+        step_size, ls_iter = metalearner.step(episodes, max_kl=args.max_kl, cg_iters=args.cg_iters,
             cg_damping=args.cg_damping, ls_max_steps=args.ls_max_steps,
             ls_backtrack_ratio=args.ls_backtrack_ratio)
         step_time = time.time()
         logger.debug('Finished metalearner step in {:.3f} seconds'.format(step_time - episode_sampling_time))
 
         # Tensorboard
-        writer.add_scalar('total_rewards/before_update',
-            total_rewards([ep.rewards for ep, _ in episodes]), batch)
-        writer.add_scalar('total_rewards/after_update',
-            total_rewards([ep.rewards for _, ep in episodes]), batch)
+        writer.add_scalar('meta-train/before_update',
+            total_rewards([ep[0].rewards for ep in episodes]), batch)
+        writer.add_scalar('meta-train/after_update',
+            total_rewards([ep[-1].rewards for ep in episodes]), batch)
+        writer.add_scalar('meta-train/step_size', step_size, batch)
+        writer.add_scalar('meta-train/ls_iter', ls_iter, batch)
 
         # Save policy network
         with open(os.path.join(save_folder,

@@ -252,7 +252,7 @@ class AntGoalRingEnv(AntPosEnv):
     """Ant environment with target positions distributed in a ring.
     (https://github.com/RussellM2020/maesn_suite/blob/master/maesn/rllab/envs/mujoco/ant_env_rand_goal_ring.py)
     """
-    def __init__(self, task={}, sparse=False):
+    def __init__(self, task={}, sparse=True):
         self._sparse = sparse
         super(AntGoalRingEnv, self).__init__(task)
 

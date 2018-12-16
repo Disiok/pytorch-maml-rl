@@ -185,7 +185,7 @@ class MetaLearner(object):
 
         # Line search
         step_size = 1.0
-        for _ in range(ls_max_steps):
+        for ls_iter in range(ls_max_steps):
             vector_to_parameters(old_params - step_size * step,
                                  self.policy.parameters())
             loss, kl, _ = self.surrogate_loss(episodes, old_pis=old_pis)
@@ -195,6 +195,8 @@ class MetaLearner(object):
             step_size *= ls_backtrack_ratio
         else:
             vector_to_parameters(old_params, self.policy.parameters())
+        
+        return step_size, ls_iter
 
     def to(self, device, **kwargs):
         self.policy.to(device, **kwargs)

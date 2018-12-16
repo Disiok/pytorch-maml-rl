@@ -10,33 +10,17 @@ from maml_rl.utils.torch_utils import (weighted_mean, detach_distribution,
 from maml_rl.utils.optimization import conjugate_gradient
 
 class IntrinsicMetaLearner(object):
-    """Meta-learner
-
-    The meta-learner is responsible for sampling the trajectories/episodes 
-    (before and after the one-step adaptation), compute the inner loss, compute 
-    the updated parameters based on the inner-loss, and perform the meta-update.
-
-    [1] Chelsea Finn, Pieter Abbeel, Sergey Levine, "Model-Agnostic 
-        Meta-Learning for Fast Adaptation of Deep Networks", 2017 
-        (https://arxiv.org/abs/1703.03400)
-    [2] Richard Sutton, Andrew Barto, "Reinforcement learning: An introduction",
-        2018 (http://incompleteideas.net/book/the-book-2nd.html)
-    [3] John Schulman, Philipp Moritz, Sergey Levine, Michael Jordan, 
-        Pieter Abbeel, "High-Dimensional Continuous Control Using Generalized 
-        Advantage Estimation", 2016 (https://arxiv.org/abs/1506.02438)
-    [4] John Schulman, Sergey Levine, Philipp Moritz, Michael I. Jordan, 
-        Pieter Abbeel, "Trust Region Policy Optimization", 2015
-        (https://arxiv.org/abs/1502.05477)
+    """Meta-learner with intrinsic rewards
     """
     def __init__(self, sampler, policy, reward_policy, baseline, gamma=0.95,
                  fast_lr=0.5, tau=1.0, device='cpu'):
         self.sampler = sampler
         self.policy = policy
+        self.reward_policy = reward_policy
         self.baseline = baseline
         self.gamma = gamma
         self.fast_lr = fast_lr
         self.tau = tau
-        self.reward_policy = reward_policy
         self.to(device)
 
     def inner_loss(self, episodes, policy_params=None, reward_params=None, use_intrinsic=False):
@@ -99,7 +83,7 @@ class IntrinsicMetaLearner(object):
 
             intermediate_episodes = self.sampler.sample(self.policy, params=policy_params,
                 gamma=self.gamma, device=self.device)
-            reward_params = self.adapt_reward_policy(intermediate_episodes, policy_params=policy_params)
+            reward_params = self.adapt_reward_policy(intermediate_episodes, first_order=first_order, policy_params=policy_params)
             final_policy_params = self.adapt(intermediate_episodes, first_order=first_order, reward_params=reward_params)
 
             valid_episodes = self.sampler.sample(self.policy, params=final_policy_params,
@@ -113,8 +97,11 @@ class IntrinsicMetaLearner(object):
             old_pis = [None] * len(episodes)
 
         for (train_episodes, intermediate_episodes, valid_episodes), old_pi in zip(episodes, old_pis):
-            params = self.adapt(train_episodes)
-            pi = self.policy(valid_episodes.observations, params=params)
+            policy_params = self.adapt(train_episodes)
+            reward_params = self.adapt_reward_policy(intermediate_episodes, policy_params=policy_params)
+            final_policy_params = self.adapt(intermediate_episodes, reward_params=reward_params)
+
+            pi = self.policy(valid_episodes.observations, params=final_policy_params)
 
             if old_pi is None:
                 old_pi = detach_distribution(pi)
@@ -127,31 +114,40 @@ class IntrinsicMetaLearner(object):
 
         return torch.mean(torch.stack(kls, dim=0))
 
-    def hessian_vector_product(self, episodes, damping=1e-2):
+    def hessian_vector_product(self, episodes, policy, damping=1e-2):
         """Hessian-vector product, based on the Perlmutter method."""
         def _product(vector):
             kl = self.kl_divergence(episodes)
-            grads = torch.autograd.grad(kl, self.policy.parameters(),
-                create_graph=True)
+            grads = torch.autograd.grad(kl, policy.parameters(),
+                create_graph=True, retain_graph=True)
             flat_grad_kl = parameters_to_vector(grads)
 
             grad_kl_v = torch.dot(flat_grad_kl, vector)
-            grad2s = torch.autograd.grad(grad_kl_v, self.policy.parameters())
+            grad2s = torch.autograd.grad(grad_kl_v, policy.parameters(), retain_graph=True)
             flat_grad2_kl = parameters_to_vector(grad2s)
 
             return flat_grad2_kl + damping * vector
         return _product
 
-    def surrogate_loss(self, episodes, old_pis=None):
+    def surrogate_loss(self, episodes, old_pis=None, use_intrinsic=True):
         losses, kls, pis = [], [], []
         if old_pis is None:
             old_pis = [None] * len(episodes)
 
         for (train_episodes, intermediate_episodes, valid_episodes), old_pi in zip(episodes, old_pis):
-            params = self.adapt(train_episodes)
-            valid_episodes.set_reward_policy(self.reward_policy)
+            # Adapt
+            policy_params = self.adapt(train_episodes)
+            reward_params = self.adapt_reward_policy(intermediate_episodes, policy_params=policy_params)
+            final_policy_params = self.adapt(intermediate_episodes, reward_params=reward_params)
+
+            # Whether to include intrinsic reward in the meta-objective
+            if use_intrinsic:
+                valid_episodes.set_reward_policy(self.reward_policy)
+            else:
+                valid_episodes.set_reward_policy(None)
+
             with torch.set_grad_enabled(old_pi is None):
-                pi = self.policy(valid_episodes.observations, params=params)
+                pi = self.policy(valid_episodes.observations, params=final_policy_params)
                 pis.append(detach_distribution(pi))
 
                 if old_pi is None:
@@ -182,48 +178,52 @@ class IntrinsicMetaLearner(object):
         return (torch.mean(torch.stack(losses, dim=0)),
                 torch.mean(torch.stack(kls, dim=0)), pis)
 
-    def intrinsic_surrogate_loss(self, episodes):
-        """Calculates the surrogate loss with respect to the intrinsic reward
-        """
-        losses = []
-        for train_episodes, intermediate_episodes, valid_episodes in episodes:
-            params = self.adapt(train_episodes)
-            valid_episodes.set_reward_policy(None)
-            with torch.set_grad_enabled(True):
-                pi = self.policy(valid_episodes.observations, params=params)
-                old_pi = detach_distribution(pi)
-
-                values = self.baseline(valid_episodes)
-                advantages = valid_episodes.gae(values, tau=self.tau)
-                advantages = weighted_normalize(advantages,
-                    weights=valid_episodes.mask)
-
-                log_ratio = (pi.log_prob(valid_episodes.actions)
-                    - old_pi.log_prob(valid_episodes.actions))
-                if log_ratio.dim() > 2:
-                    log_ratio = torch.sum(log_ratio, dim=2)
-                ratio = torch.exp(log_ratio)
-
-                loss = -weighted_mean(ratio * advantages, dim=0,
-                    weights=valid_episodes.mask)
-                losses.append(loss)
-
-        return torch.mean(torch.stack(losses, dim=0))
-    
     def step(self, episodes, max_kl=1e-3, cg_iters=10, cg_damping=1e-2,
              ls_max_steps=10, ls_backtrack_ratio=0.5):
 
-        self.step_reward_policy(episodes)
-        self.step_policy(episodes, max_kl=max_kl, cg_iters=cg_iters,
+        # self.step_reward_policy(episodes)
+        return self.step_policy(episodes, max_kl=max_kl, cg_iters=cg_iters,
             cg_damping=cg_damping, ls_max_steps=ls_max_steps,
             ls_backtrack_ratio=ls_backtrack_ratio)
 
-    def step_reward_policy(self, episodes, lr=1e-1):
-        loss = self.intrinsic_surrogate_loss(episodes)
-        grads = torch.autograd.grad(loss, self.reward_policy.parameters())
+    def step_reward_policy(self, episodes, max_kl=1e-3, cg_iters=10, cg_damping=1e-2,
+             ls_max_steps=10, ls_backtrack_ratio=0.5):
+        """Meta-optimization step (ie. update of the initial parameters), based 
+        on Trust Region Policy Optimization (TRPO, [4]).
+        """
+        old_loss, _, old_pis = self.surrogate_loss(episodes, use_intrinsic=False)
+        grads = torch.autograd.grad(old_loss, self.reward_policy.parameters(), retain_graph=True)
         grads = parameters_to_vector(grads)
+
+        # Compute the step direction with Conjugate Gradient
+        hessian_vector_product = self.hessian_vector_product(episodes, self.reward_policy,
+            damping=cg_damping)
+        stepdir = conjugate_gradient(hessian_vector_product, grads,
+            cg_iters=cg_iters)
+
+        # Compute the Lagrange multiplier
+        shs = 0.5 * torch.dot(stepdir, hessian_vector_product(stepdir))
+        lagrange_multiplier = torch.sqrt(shs / max_kl)
+
+        step = stepdir / lagrange_multiplier
+
+        # Save the old parameters
         old_params = parameters_to_vector(self.reward_policy.parameters())
-        vector_to_parameters(old_params - lr * grads, self.reward_policy.parameters())
+
+        # Line search
+        step_size = 1.0
+        for ls_iter in range(ls_max_steps):
+            vector_to_parameters(old_params - step_size * step,
+                                 self.reward_policy.parameters())
+            loss, kl, _ = self.surrogate_loss(episodes, old_pis=old_pis)
+            improve = loss - old_loss
+            if (improve.item() < 0.0) and (kl.item() < max_kl):
+                break
+            step_size *= ls_backtrack_ratio
+        else:
+            vector_to_parameters(old_params, self.reward_policy.parameters())
+        
+        return step_size, ls_iter
 
     def step_policy(self, episodes, max_kl=1e-3, cg_iters=10, cg_damping=1e-2,
              ls_max_steps=10, ls_backtrack_ratio=0.5):
@@ -231,11 +231,11 @@ class IntrinsicMetaLearner(object):
         on Trust Region Policy Optimization (TRPO, [4]).
         """
         old_loss, _, old_pis = self.surrogate_loss(episodes)
-        grads = torch.autograd.grad(old_loss, self.policy.parameters())
+        grads = torch.autograd.grad(old_loss, self.policy.parameters(), retain_graph=True)
         grads = parameters_to_vector(grads)
 
         # Compute the step direction with Conjugate Gradient
-        hessian_vector_product = self.hessian_vector_product(episodes,
+        hessian_vector_product = self.hessian_vector_product(episodes, self.policy,
             damping=cg_damping)
         stepdir = conjugate_gradient(hessian_vector_product, grads,
             cg_iters=cg_iters)
@@ -251,7 +251,7 @@ class IntrinsicMetaLearner(object):
 
         # Line search
         step_size = 1.0
-        for _ in range(ls_max_steps):
+        for ls_iter in range(ls_max_steps):
             vector_to_parameters(old_params - step_size * step,
                                  self.policy.parameters())
             loss, kl, _ = self.surrogate_loss(episodes, old_pis=old_pis)
@@ -261,6 +261,8 @@ class IntrinsicMetaLearner(object):
             step_size *= ls_backtrack_ratio
         else:
             vector_to_parameters(old_params, self.policy.parameters())
+        
+        return step_size, ls_iter
 
     def to(self, device, **kwargs):
         self.policy.to(device, **kwargs)
