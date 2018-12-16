@@ -13,16 +13,12 @@ from maml_rl.intrinsic_metalearner import IntrinsicMetaLearner
 from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
+from maml_rl.utils import torch_utils
 
 from tensorboardX import SummaryWriter
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-def total_rewards(episodes_rewards, aggregation=torch.mean):
-    rewards = torch.mean(torch.stack([aggregation(torch.sum(rewards, dim=0))
-        for rewards in episodes_rewards], dim=0))
-    return rewards.item()
 
 def normalize_task_ids(task_distribution):
     """
@@ -94,9 +90,9 @@ def main(args):
 
         # Tensorboard
         writer.add_scalar('total_rewards/before_update',
-            total_rewards([ep.rewards for ep, _ in episodes]), batch)
+            torch_utils.total_rewards([ep.rewards for ep, _ in episodes]), batch)
         writer.add_scalar('total_rewards/after_update',
-            total_rewards([ep.rewards for _, ep in episodes]), batch)
+            torch_utils.total_rewards([ep.rewards for _, ep in episodes]), batch)
 
         # Save policy network
         with open(os.path.join(save_folder,

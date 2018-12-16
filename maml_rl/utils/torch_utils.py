@@ -29,3 +29,9 @@ def detach_distribution(pi):
         raise NotImplementedError('Only `Categorical` and `Normal` '
                                   'policies are valid policies.')
     return distribution
+
+def total_rewards(episodes_rewards, aggregation=torch.mean):
+    rewards = torch.mean(torch.stack([aggregation(torch.sum(rewards, dim=0))
+        for rewards in episodes_rewards], dim=0))
+    return rewards.item()
+
