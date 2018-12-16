@@ -13,6 +13,7 @@ from maml_rl.intrinsic_metalearner import IntrinsicMetaLearner
 from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
+from maml_rl.reward import IntrinsicReward
 
 from tensorboardX import SummaryWriter
 
@@ -64,17 +65,29 @@ def main(args):
             int(np.prod(sampler.envs.action_space.shape)),
             hidden_sizes=(args.hidden_size,) * args.num_layers)
 
+        if args.intrinsic_reward:
+            reward_policy = IntrinsicReward(
+                int(np.prod(sampler.envs.observation_space.shape)) + int(np.prod(sampler.envs.action_space.shape)),
+                hidden_sizes=(args.hidden_size,) * args.num_layers)
     else:
         policy = CategoricalMLPPolicy(
             int(np.prod(sampler.envs.observation_space.shape)),
             sampler.envs.action_space.n,
             hidden_sizes=(args.hidden_size,) * args.num_layers)
 
+        if args.intrinsic_reward:
+            reward_policy = IntrinsicReward(
+                int(np.prod(sampler.envs.observation_space.shape)) + sampler.envs.action_space.n,
+                hidden_sizes=(args.hidden_size,) * args.num_layers)
     baseline = LinearFeatureBaseline(
         int(np.prod(sampler.envs.observation_space.shape)))
 
-    metalearner = MetaLearner(sampler, policy, baseline, gamma=args.gamma,
-        fast_lr=args.fast_lr, tau=args.tau, device=args.device)
+    if args.intrinsic_reward:
+        metalearner = IntrinsicMetaLearner(sampler, policy, reward_policy, baseline, gamma=args.gamma,
+            fast_lr=args.fast_lr, tau=args.tau, device=args.device)
+    else:
+        metalearner = MetaLearner(sampler, policy, baseline, gamma=args.gamma,
+            fast_lr=args.fast_lr, tau=args.tau, device=args.device)
 
     for batch in range(args.num_batches):
         start_time = time.time()
@@ -103,6 +116,12 @@ def main(args):
                 'policy-{0}.pt'.format(batch)), 'wb') as f:
             torch.save(policy.state_dict(), f)
 
+        # Save intrinsic reward network
+        if args.intrinsic_reward:
+            with open(os.path.join(save_folder,
+                    'reward-policy-{0}.pt'.format(batch)), 'wb') as f:
+                torch.save(reward_policy.state_dict(), f)
+
 
 if __name__ == '__main__':
     import argparse
@@ -129,6 +148,10 @@ if __name__ == '__main__':
         help='number of hidden units per layer')
     parser.add_argument('--num-layers', type=int, default=2,
         help='number of hidden layers')
+
+    # Intrinsic reward network
+    parser.add_argument('--intrinsic-reward', action='store_true',
+        help='use intrinsic reward to provide additional supervision')
 
     # Task-specific
     parser.add_argument('--tasks', type=str, default=None,
