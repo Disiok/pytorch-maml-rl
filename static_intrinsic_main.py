@@ -106,7 +106,8 @@ def main(args):
         reward = IntrinsicReward(
             int(np.prod(sampler.envs.observation_space.shape)) +
             int(np.prod(sampler.envs.action_space.shape)),
-            (args.hidden_size,) * args.num_layers
+            hidden_sizes=(args.hidden_size,)*args.num_layers,
+            reward_importance=args.intrinsic_weight
         )
     else:
         raise NotImplementedError
