@@ -12,6 +12,7 @@ import random
 import logging
 import numpy as np
 
+from maml_rl.envs import CONTINUOUS_ENVS
 from maml_rl.metalearner import MetaLearner
 from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
@@ -26,27 +27,6 @@ from tensorboardX import SummaryWriter
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-
-CONTINUOUS_ENVS = [
-    # MAML environments
-    'Pusher-v0',
-    'AntVel-v1',
-    'AntDir-v1',
-    'AntPos-v0',
-    'HalfCheetahVel-v1',
-    'HalfCheetahDir-v1',
-
-    # MAESN dense environments
-    'AntGoalRing-v0',
-    'Wheeled-v0'
-    '2DNavigation-v0',
-
-    # MAESN sparse environments
-    'SparseAntGoalRing-v0',
-    'SparseWheeled-v0'
-    'Sparse2DNavigation-v0',
-]
 
 
 def total_rewards(episodes_rewards, aggregation=torch.mean):

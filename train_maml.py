@@ -1,59 +1,29 @@
-#
-#
-#
 import maml_rl.envs
 import gym
-import json
-import time
-import torch
-import random
-import logging
 import numpy as np
+import torch
+import json
+import logging
+import time
+import random
 
-from maml_rl.reward import IntrinsicReward
-from maml_rl.policies import NormalMLPPolicy
+from maml_rl.envs import CONTINUOUS_ENVS
+from maml_rl.metalearner import MetaLearner
+from maml_rl.intrinsic_metalearner import IntrinsicMetaLearner
+from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
-from maml_rl.static_intrinsic_sampler import StaticIntrinsicBatchSampler
-from maml_rl.static_intrinsic_metalearner import StaticIntrinsicMetaLearner
+from maml_rl.sampler import BatchSampler
+from maml_rl.reward import IntrinsicReward
 
 from tensorboardX import SummaryWriter
-from torch.nn.utils.convert_parameters import (
-    vector_to_parameters, parameters_to_vector
-)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-
-CONTINUOUS_ENVS = [
-    # MAML environments
-    'Pusher-v0',
-    'AntVel-v1',
-    'AntDir-v1',
-    'AntPos-v0',
-    'HalfCheetahVel-v1',
-    'HalfCheetahDir-v1',
-
-    # MAESN dense environments
-    'AntGoalRing-v0',
-    'Wheeled-v0'
-    '2DNavigation-v0',
-
-    # MAESN sparse environments
-    'SparseAntGoalRing-v0',
-    'SparseWheeled-v0'
-    'Sparse2DNavigation-v0',
-]
-
-
 def total_rewards(episodes_rewards, aggregation=torch.mean):
-    """
-
-    """
     rewards = torch.mean(torch.stack([aggregation(torch.sum(rewards, dim=0))
         for rewards in episodes_rewards], dim=0))
     return rewards.item()
-
 
 def normalize_task_ids(task_distribution):
     """
@@ -67,11 +37,7 @@ def normalize_task_ids(task_distribution):
         task['task_id'] = task_id
     return task_distribution
 
-
 def main(args):
-    """
-
-    """
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -91,78 +57,53 @@ def main(args):
     assert(os.path.exists(args.tasks))
     task_distribution = normalize_task_ids(torch.load(args.tasks))
 
-    sampler = StaticIntrinsicBatchSampler(
-        args.env_name,
-        batch_size=args.fast_batch_size,
-        num_workers=args.num_workers
-    )
-
+    sampler = BatchSampler(args.env_name, batch_size=args.fast_batch_size,
+        num_workers=args.num_workers)
     if continuous_actions:
         policy = NormalMLPPolicy(
             int(np.prod(sampler.envs.observation_space.shape)),
             int(np.prod(sampler.envs.action_space.shape)),
-            (args.hidden_size,) * args.num_layers
-        )
-        reward = IntrinsicReward(
-            int(np.prod(sampler.envs.observation_space.shape)) +
-            int(np.prod(sampler.envs.action_space.shape)),
-            hidden_sizes=(args.hidden_size,)*args.num_layers,
-            reward_importance=args.intrinsic_weight
-        )
+            hidden_sizes=(args.hidden_size,) * args.num_layers)
+
+        if args.intrinsic_reward:
+            reward_policy = IntrinsicReward(
+                int(np.prod(sampler.envs.observation_space.shape)) + int(np.prod(sampler.envs.action_space.shape)),
+                hidden_sizes=(args.hidden_size,) * args.num_layers)
     else:
-        raise NotImplementedError
+        policy = CategoricalMLPPolicy(
+            int(np.prod(sampler.envs.observation_space.shape)),
+            sampler.envs.action_space.n,
+            hidden_sizes=(args.hidden_size,) * args.num_layers)
 
+        if args.intrinsic_reward:
+            reward_policy = IntrinsicReward(
+                int(np.prod(sampler.envs.observation_space.shape)) + sampler.envs.action_space.n,
+                hidden_sizes=(args.hidden_size,) * args.num_layers)
     baseline = LinearFeatureBaseline(
-        int(np.prod(sampler.envs.observation_space.shape))
-    )
+        int(np.prod(sampler.envs.observation_space.shape)))
 
-    metalearner = StaticIntrinsicMetaLearner(
-        sampler, policy, reward, baseline,
-        gamma=args.gamma, fast_lr=args.fast_lr,
-        tau=args.tau, device=args.device
-    )
+    if args.intrinsic_reward:
+        metalearner = IntrinsicMetaLearner(sampler, policy, reward_policy, baseline, gamma=args.gamma,
+            fast_lr=args.fast_lr, tau=args.tau, device=args.device)
+    else:
+        metalearner = MetaLearner(sampler, policy, baseline, gamma=args.gamma,
+            fast_lr=args.fast_lr, tau=args.tau, device=args.device)
 
     for batch in range(args.num_batches):
-        start = time.time()
+        start_time = time.time()
         tasks = random.sample(task_distribution, args.meta_batch_size)
-        logger.debug('Finished sampling tasks in {:.3f} seconds.'.format(time.time() - start))
+        task_sampling_time = time.time()
+        logger.debug('Finished sampling tasks in {:.3f} seconds'.format(task_sampling_time - start_time))
 
-        start = time.time()
         episodes = metalearner.sample(tasks, first_order=args.first_order)
-        logger.debug('Finished sampling episodes in {:.3f} seconds.'.format(time.time() - start))
+        episode_sampling_time = time.time()
+        logger.debug('Finished sampling episodes in {:.3f} seconds'.format(episode_sampling_time - task_sampling_time))
 
-        writer.add_scalar(
-            'intrinsic_rewards/before_update',
-            total_rewards([ep.intrinsic_rewards(reward) for ep, _ in episodes]),
-            batch
-        )
-        writer.add_scalar(
-            'intrinsic_rewards/after_update',
-            total_rewards([ep.intrinsic_rewards(reward) for _, ep in episodes]),
-            batch
-        )
-
-        writer.add_scalar(
-            'mixed_rewards/before_update',
-            total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for ep, _ in episodes]),
-            batch
-        )
-        writer.add_scalar(
-            'mixed_rewards/after_update',
-            total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for _, ep in episodes]),
-            batch
-        )
-
-        start = time.time()
-        policy_step, reward_step = metalearner.step(
-            episodes,
-            max_kl=args.max_kl,
-            cg_iters=args.cg_iters,
-            cg_damping=args.cg_damping,
-            ls_max_steps=args.ls_max_steps,
-            ls_backtrack_ratio=args.ls_backtrack_ratio
-        )
-        logger.debug('Finished metalearner step in {:.3f} seconds.'.format(time.time() - start))
+        metalearner.step(episodes, max_kl=args.max_kl, cg_iters=args.cg_iters,
+            cg_damping=args.cg_damping, ls_max_steps=args.ls_max_steps,
+            ls_backtrack_ratio=args.ls_backtrack_ratio)
+        step_time = time.time()
+        logger.debug('Finished metalearner step in {:.3f} seconds'.format(step_time - episode_sampling_time))
 
         # Tensorboard
         writer.add_scalar('total_rewards/before_update',
@@ -170,38 +111,16 @@ def main(args):
         writer.add_scalar('total_rewards/after_update',
             total_rewards([ep.rewards for _, ep in episodes]), batch)
 
-        for name, param in reward.named_parameters():
-            writer.add_histogram('reward/' + name, param.detach().cpu().numpy(), batch)
-
-        for name, param in policy.named_parameters():
-            writer.add_histogram('policy/' + name, param.detach().cpu().numpy(), batch)
-
-        policy_parameters = []
-        for (name, param) in policy.named_parameters():
-            policy_parameters.append(param.clone())
-
-        reward_parameters = []
-        for (name, param) in reward.named_parameters():
-            reward_parameters.append(param.clone())
-
-        vector_to_parameters(policy_step.detach(), policy_parameters)
-        vector_to_parameters(reward_step.detach(), reward_parameters)
-
-        for (name, param), grad in zip(reward.named_parameters(), reward_parameters):
-            writer.add_histogram('reward_grad/' + name, grad.detach().cpu().numpy(), batch)
-
-        for (name, param), grad in zip(policy.named_parameters(), policy_parameters):
-            writer.add_histogram('policy_grad/' + name, grad.detach().cpu().numpy(), batch)
-
         # Save policy network
-        save_file = os.path.join(save_folder, 'policy-{0}.pt'.format(batch))
-        with open(save_file, 'wb') as f:
+        with open(os.path.join(save_folder,
+                'policy-{0}.pt'.format(batch)), 'wb') as f:
             torch.save(policy.state_dict(), f)
 
-        # Save reward network
-        save_file = os.path.join(save_folder, 'reward-{0}.pt'.format(batch))
-        with open(save_file, 'wb') as f:
-            torch.save(reward.state_dict(), f)
+        # Save intrinsic reward network
+        if args.intrinsic_reward:
+            with open(os.path.join(save_folder,
+                    'reward-policy-{0}.pt'.format(batch)), 'wb') as f:
+                torch.save(reward_policy.state_dict(), f)
 
 
 if __name__ == '__main__':
@@ -209,9 +128,8 @@ if __name__ == '__main__':
     import os
     import multiprocessing as mp
 
-    parser = argparse.ArgumentParser(
-        description='Meta-Reinforcement Learning with Intrinsic Rewards'
-    )
+    parser = argparse.ArgumentParser(description='Reinforcement learning with '
+        'Model-Agnostic Meta-Learning (MAML)')
 
     # General
     parser.add_argument('--seed', type=int, default=1,
@@ -222,8 +140,6 @@ if __name__ == '__main__':
         help='value of the discount factor gamma')
     parser.add_argument('--tau', type=float, default=1.0,
         help='value of the discount factor for GAE')
-    parser.add_argument('--intrinsic-weight', type=float, default=1.0,
-        help='weight of intrinsic rewards')
     parser.add_argument('--first-order', action='store_true',
         help='use the first-order approximation of MAML')
 
@@ -232,6 +148,10 @@ if __name__ == '__main__':
         help='number of hidden units per layer')
     parser.add_argument('--num-layers', type=int, default=2,
         help='number of hidden layers')
+
+    # Intrinsic reward network
+    parser.add_argument('--intrinsic-reward', action='store_true',
+        help='use intrinsic reward to provide additional supervision')
 
     # Task-specific
     parser.add_argument('--tasks', type=str, default=None,
@@ -276,7 +196,6 @@ if __name__ == '__main__':
     # Device
     args.device = torch.device(args.device
         if torch.cuda.is_available() else 'cpu')
-
     # Slurm
     if 'SLURM_JOB_ID' in os.environ:
         args.output_folder += '-{0}'.format(os.environ['SLURM_JOB_ID'])

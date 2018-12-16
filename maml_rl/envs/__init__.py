@@ -108,3 +108,23 @@ register(
     entry_point='maml_rl.envs.navigation:Navigation2DEnv',
     max_episode_steps=100
 )
+
+CONTINUOUS_ENVS = [
+    # MAML environments
+    '2DNavigation-v0',
+    'AntVel-v1',
+    'AntDir-v1',
+    'AntPos-v0',
+    'HalfCheetahVel-v1',
+    'HalfCheetahDir-v1',
+
+    # MAESN dense environments
+    'AntGoalRing-v0',
+    'Pusher-v0',
+    'Wheeled-v0',
+
+    # MAESN sparse environments
+    'SparseAntGoalRing-v0',
+    'SparseWheeled-v0'
+    'SparsePusher-v0',
+]
