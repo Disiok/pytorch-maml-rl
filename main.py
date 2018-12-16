@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 CONTINUOUS_ENVS = [
     # MAML environments
-    'Pusher-v0',
+    '2DNavigation-v0',
     'AntVel-v1',
     'AntDir-v1',
     'AntPos-v0',
@@ -30,13 +30,13 @@ CONTINUOUS_ENVS = [
 
     # MAESN dense environments
     'AntGoalRing-v0',
-    'Wheeled-v0'
-    '2DNavigation-v0',
+    'Pusher-v0',
+    'Wheeled-v0',
 
     # MAESN sparse environments
     'SparseAntGoalRing-v0',
     'SparseWheeled-v0'
-    'Sparse2DNavigation-v0',
+    'SparsePusher-v0',
 ]
 
 def total_rewards(episodes_rewards, aggregation=torch.mean):
