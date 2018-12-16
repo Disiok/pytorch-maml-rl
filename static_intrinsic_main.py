@@ -10,6 +10,7 @@ import random
 import logging
 import numpy as np
 
+from maml_rl.reward import IntrinsicReward
 from maml_rl.policies import NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.static_intrinsic_sampler import StaticIntrinsicBatchSampler
@@ -86,7 +87,7 @@ def main(args):
         json.dump(config, f, indent=2)
 
     assert(os.path.exists(args.tasks))
-    task_distribution = normalize_task_ids(torch.load(args.tasks))
+    task_distribution = normalize_task_ids(torch.load(args.tasks))[0:1]
 
     sampler = StaticIntrinsicBatchSampler(
         args.env_name,
@@ -101,7 +102,9 @@ def main(args):
             (args.hidden_size,) * args.num_layers
         )
         reward = IntrinsicReward(
-            int(np.prod(ç))
+            int(np.prod(sampler.envs.observation_space.shape)) +
+            int(np.prod(sampler.envs.action_space.shape)),
+            (args.hidden_size,) * args.num_layers
         )
     else:
         raise NotImplementedError
@@ -110,8 +113,8 @@ def main(args):
         int(np.prod(sampler.envs.observation_space.shape))
     )
 
-    metalearner = MAESNMetaLearner(
-        sampler, policy, baseline,
+    metalearner = StaticIntrinsicMetaLearner(
+        sampler, policy, reward, baseline,
         gamma=args.gamma, fast_lr=args.fast_lr,
         tau=args.tau, device=args.device
     )
@@ -142,20 +145,15 @@ def main(args):
         writer.add_scalar('total_rewards/after_update',
             total_rewards([ep.rewards for _, ep in episodes]), batch)
 
-        writer.add_scalar('latent_space/latent_mus_step_size',
-            policy.latent_mus_step_size.mean(), batch)
-        writer.add_scalar('latent_space/latent_sigmas_step_size',
-            policy.latent_sigmas_step_size.mean(), batch)
-
-        writer.add_scalar('latent_space/latent_mus',
-            policy.latent_mus.mean(), batch)
-        writer.add_scalar('latent_space/latent_sigmas',
-            policy.latent_sigmas.mean(), batch)
-
         # Save policy network
         save_file = os.path.join(save_folder, 'policy-{0}.pt'.format(batch))
         with open(save_file, 'wb') as f:
             torch.save(policy.state_dict(), f)
+
+        # Save reward network
+        save_file = os.path.join(save_folder, 'reward-{0}.pt'.format(batch))
+        with open(save_file, 'wb') as f:
+            torch.save(reward.state_dict(), f)
 
 
 if __name__ == '__main__':
@@ -164,7 +162,7 @@ if __name__ == '__main__':
     import multiprocessing as mp
 
     parser = argparse.ArgumentParser(
-        description='Meta-Reinforcement Learning with Structured Exploration (MAESN)'
+        description='Meta-Reinforcement Learning with Intrinsic Rewards'
     )
 
     # General

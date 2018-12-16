@@ -45,6 +45,7 @@ class StaticIntrinsicMetaLearner(object):
 
         :param sampler  [MAESNBatchSampler]:
         :param policy   [MAESNPolicy]:
+        :param reward   [Reward]:
         :param baseline [LinearFeatureBaseline]:
         :param gamma    [float]:
         :param fast_lr  [float]:
@@ -62,7 +63,7 @@ class StaticIntrinsicMetaLearner(object):
 
     def inner_loss(self,
                    episodes,
-                   policy_params=None):
+                   params=None):
         """
         Compute the inner loss for a one-step gradient update.
         The inner loss is REINFORCE with baseline [2], computed on
@@ -77,8 +78,8 @@ class StaticIntrinsicMetaLearner(object):
         values = self.baseline(episodes)
         advantages = episodes.gae(
             values,
-            intrinsic_rewards=self.reward,
-            tau = self.tau
+            intrinsic=self.reward,
+            tau=self.tau
         )
         advantages = weighted_normalize(
             advantages,
@@ -116,10 +117,7 @@ class StaticIntrinsicMetaLearner(object):
         self.baseline.fit(episodes)
 
         # Get the loss on the training episodes.
-        loss = self.inner_loss(
-            episodes,
-            first_order=first_order
-        )
+        loss = self.inner_loss(episodes)
 
         # Get the new parameters after a one-step gradient update
         params = self.policy.update_params(
@@ -305,7 +303,7 @@ class StaticIntrinsicMetaLearner(object):
 
         """
         # Update policy network.
-        step_function(
+        self.step_function(
             self.policy,
             episodes,
             max_kl=max_kl,
@@ -317,7 +315,7 @@ class StaticIntrinsicMetaLearner(object):
         )
 
         # Update reward network.
-        step_function(
+        self.step_function(
             self.reward,
             episodes,
             max_kl=max_kl,
