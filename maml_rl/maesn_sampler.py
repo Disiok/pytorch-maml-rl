@@ -60,7 +60,7 @@ class MAESNBatchSampler(object):
 
         # Sample Normal noise per episode.
         noise_distribution = torch.distributions.Normal(0, 1)
-        noise_tensor = noise_distribution.sample((self.batch_size, policy.latent_dim))
+        noise_tensor = noise_distribution.sample((self.batch_size, policy.latent_dim)).to(device)
         task_tensor = torch.tensor([self.task_id], dtype=torch.long, device=device)
 
         # Construct a batch of episodes.

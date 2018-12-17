@@ -422,6 +422,7 @@ class StaticIntrinsicMetaLearner(object):
         """
 
         """
+        self.reward.to(device, **kwargs)
         self.policy.to(device, **kwargs)
         self.reward.to(device, **kwargs)
         self.baseline.to(device, **kwargs)
