@@ -13,7 +13,7 @@ import logging
 import numpy as np
 
 from maml_rl.envs import CONTINUOUS_ENVS
-from maml_rl.reward import IntrinsicReward
+from maml_rl.policies import IntrinsicReward
 from maml_rl.policies import NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.static_intrinsic_sampler import StaticIntrinsicBatchSampler

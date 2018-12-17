@@ -62,6 +62,11 @@ def main(args):
             len(task_distribution),
             default_step_size=args.fast_lr
         )
+
+        if args.checkpoint is not None:
+            assert(os.path.exists(args.checkpoint))
+            checkpoint = torch.load(args.checkpoint)
+            policy.load_state_dict(checkpoint)
     else:
         raise NotImplementedError
 
@@ -132,6 +137,8 @@ if __name__ == '__main__':
         help='use the first-order approximation of MAML')
 
     # Policy network (relu activation function)
+    parser.add_argument('--checkpoint', type=str, default=None,
+        help='checkpoint to start from')
     parser.add_argument('--hidden-size', type=int, default=100,
         help='number of hidden units per layer')
     parser.add_argument('--num-layers', type=int, default=2,
@@ -148,7 +155,7 @@ if __name__ == '__main__':
         help='learning rate for the 1-step gradient update of MAML')
 
     # Optimization
-    parser.add_argument('--num-batches', type=int, default=200,
+    parser.add_argument('--num-batches', type=int, default=500,
         help='number of batches')
     parser.add_argument('--meta-batch-size', type=int, default=40,
         help='number of tasks per batch')

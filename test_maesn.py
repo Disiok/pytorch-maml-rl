@@ -105,10 +105,16 @@ def main(args):
             policy.set_parameters(params)
             logger.debug('Finished adaptation step in {:.3f} seconds.'.format(time.time() - start))
 
+            if batch >= 1:
+                with torch.no_grad():
+                    policy.latent_mus_step_size /= 2
+                    policy.latent_sigmas_step_size /= 2
+                logger.debug('Reduced step sizes by half.')
+
             if not task['task_id'] in task_rewards:
                 task_rewards[task['task_id']] = []
 
-            rewards = total_rewards([episodes.rewards])
+            rewards = torch_utils.total_rewards([episodes.rewards])
             task_rewards[task['task_id']].append(rewards)
 
             # Tensorboard
@@ -183,7 +189,7 @@ if __name__ == '__main__':
         help='random seed')
     parser.add_argument('--env-name', type=str,
         help='name of the environment')
-    parser.add_argument('--gamma', type=float, default=0.95,
+    parser.add_argument('--gamma', type=float, default=0.99,
         help='value of the discount factor gamma')
     parser.add_argument('--tau', type=float, default=1.0,
         help='value of the discount factor for GAE')
@@ -201,13 +207,13 @@ if __name__ == '__main__':
     # Task-specific
     parser.add_argument('--tasks', type=str, default=None,
         help='task distribution')
-    parser.add_argument('--fast-batch-size', type=int, default=20,
+    parser.add_argument('--fast-batch-size', type=int, default=40,
         help='batch size for each individual task')
     parser.add_argument('--fast-lr', type=float, default=0.5,
         help='learning rate for the 1-step gradient update of MAML')
 
     # Optimization
-    parser.add_argument('--num-batches', type=int, default=200,
+    parser.add_argument('--num-batches', type=int, default=100,
         help='number of batches')
 
     # Miscellaneous
@@ -219,6 +225,7 @@ if __name__ == '__main__':
         help='set the device (cpu or cuda)')
 
     args = parser.parse_args()
+    print(args)
 
     # Create logs and saves folder if they don't exist
     args.out = os.path.expanduser(args.out)
