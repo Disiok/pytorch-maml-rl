@@ -15,7 +15,7 @@ from maml_rl.maesn_metalearner import MAESNMetaLearner
 from maml_rl.policies import MAESNNormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.maesn_sampler import MAESNBatchSampler
-from maml_rl.utils import pytorch_utils, task_utils
+from maml_rl.utils import torch_utils, task_utils
 
 from tensorboardX import SummaryWriter
 
@@ -97,19 +97,12 @@ def main(args):
 
         # Tensorboard
         writer.add_scalar('total_rewards/before_update',
-            pytorch_utils.total_rewards([ep.rewards for ep, _ in episodes]), batch)
+            torch_utils.total_rewards([ep.rewards for ep, _ in episodes]), batch)
         writer.add_scalar('total_rewards/after_update',
-            pytorch_utils.total_rewards([ep.rewards for _, ep in episodes]), batch)
+            torch_utils.total_rewards([ep.rewards for _, ep in episodes]), batch)
 
-        writer.add_scalar('latent_space/latent_mus_step_size',
-            policy.latent_mus_step_size.mean(), batch)
-        writer.add_scalar('latent_space/latent_sigmas_step_size',
-            policy.latent_sigmas_step_size.mean(), batch)
-
-        writer.add_scalar('latent_space/latent_mus',
-            policy.latent_mus.mean(), batch)
-        writer.add_scalar('latent_space/latent_sigmas',
-            policy.latent_sigmas.mean(), batch)
+        for name, param in policy.named_parameters():
+            writer.add_histogram('policy/' + name, param.detach().cpu().numpy(), batch)
 
         # Save policy network
         save_file = os.path.join(save_folder, 'policy-{0}.pt'.format(batch))
@@ -131,7 +124,7 @@ if __name__ == '__main__':
         help='random seed')
     parser.add_argument('--env-name', type=str,
         help='name of the environment')
-    parser.add_argument('--gamma', type=float, default=0.95,
+    parser.add_argument('--gamma', type=float, default=0.99,
         help='value of the discount factor gamma')
     parser.add_argument('--tau', type=float, default=1.0,
         help='value of the discount factor for GAE')
