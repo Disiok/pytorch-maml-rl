@@ -89,7 +89,7 @@ def main(args):
             intrinsic_reward = None
     baseline = LinearFeatureBaseline(
         int(np.prod(sampler.envs.observation_space.shape)))
-    optimizer = optim.SGD(policy.parameters(), lr=1e-2)
+    optimizer = optim.SGD(policy.parameters(), lr=args.fast_lr)
 
     task = sampler.sample_tasks(num_tasks=5, seed=999)[0]
     for batch in range(args.num_batches):
@@ -103,7 +103,6 @@ def main(args):
         # Get the loss on the training episodes
         optimizer.zero_grad()
         loss = inner_loss(policy, baseline, train_episodes)
-        print(loss.item())
         loss.backward()
         optimizer.step()
         episodes = [train_episodes]

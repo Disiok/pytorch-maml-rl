@@ -10,6 +10,7 @@ from maml_rl.metalearner import MetaLearner
 from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy, IntrinsicReward
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import TrajectorySampler
+from maml_rl.envs import CONTINUOUS_ENVS
 
 from tensorboardX import SummaryWriter
 
@@ -17,9 +18,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 def main(args):
-    continuous_actions = (args.env_name in ['Wheeled-v0', 'Pusher-v0', 'AntVel-v1', 'AntDir-v1',
-        'AntPos-v0', 'AntGoalRing-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
-        '2DNavigation-v0'])
+    continuous_actions = args.env_name in CONTINUOUS_ENVS
 
     # Create folder for video renders
     render_folder = './renders/{0}'.format(args.output_folder)

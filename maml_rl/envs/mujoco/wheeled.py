@@ -61,14 +61,18 @@ class WheeledTaskEnv(WheeledEnv):
         observation = self._get_obs()
 
         ctrl_cost = 1e-1 * 0.5 * np.sum(np.square(action))
+        goal_distance = np.linalg.norm(observation[:2] - self._goal_pos)
+        goal_position = np.linalg.norm(self._goal_pos)
 
-        if self._sparse and np.linalg.norm(observation[:2] - self._goal_pos) > 0.8 :
-            reward = -np.linalg.norm(self._goal_pos) - ctrl_cost
+        if self._sparse and goal_distance > 0.8 :
+            goal_reward = -goal_position
         else:
-            reward = -np.linalg.norm(observation[:2] - self._goal_pos) - ctrl_cost
+            goal_reward = -goal_distance
+        reward = goal_reward - ctrl_cost
 
         done = False
-        infos = dict()
+        infos = dict(reward_goal=goal_reward, reward_ctrl=-ctrl_cost, reward_total=reward)
+
         return (observation, reward, done, infos)
 
     def sample_tasks(self, num_tasks, seed=None):
