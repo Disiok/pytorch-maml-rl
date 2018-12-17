@@ -53,9 +53,6 @@ def main(args):
     assert(os.path.exists(args.tasks))
     task_distribution = task_utils.normalize_task_ids(torch.load(args.tasks))
 
-    assert(os.path.exists(args.checkpoint))
-    checkpoint = torch.load(args.checkpoint)
-
     sampler = BatchSampler(
         args.env_name,
         batch_size=args.fast_batch_size,
@@ -76,14 +73,21 @@ def main(args):
                 int(np.prod(sampler.envs.action_space.shape)),
                 (args.hidden_size,) * args.num_layers
             )
-            policy.load_state_dict(checkpoint)
+
+            if args.checkpoint is not None:
+                assert(os.path.exists(args.checkpoint))
+                checkpoint = torch.load(args.checkpoint)
+                policy.load_state_dict(checkpoint)
         else:
             policy = CategoricalMLPPolicy(
                 int(np.prod(sampler.envs.observation_space.shape)),
                 sampler.envs.action_space.n,
                 hidden_sizes=(args.hidden_size,) * args.num_layers
             )
-            policy.load_state_dict(checkpoint)
+            if args.checkpoint is not None:
+                assert(os.path.exists(args.checkpoint))
+                checkpoint = torch.load(args.checkpoint)
+                policy.load_state_dict(checkpoint)
 
         metalearner = MetaLearner(
             sampler, policy, baseline,
@@ -181,7 +185,7 @@ if __name__ == '__main__':
         help='task distribution')
     parser.add_argument('--fast-batch-size', type=int, default=40,
         help='batch size for each individual task')
-    parser.add_argument('--fast-lr', type=float, default=0.1,
+    parser.add_argument('--fast-lr', type=float, default=0.5,
         help='learning rate for the 1-step gradient update of MAML')
 
     # Optimization

@@ -119,7 +119,7 @@ if __name__ == '__main__':
         help='task distribution')
     parser.add_argument('--fast-batch-size', type=int, default=20,
         help='batch size for each individual task')
-    parser.add_argument('--fast-lr', type=float, default=0.1,
+    parser.add_argument('--fast-lr', type=float, default=0.5,
         help='learning rate for the 1-step gradient update of MAML')
 
     # Optimization
