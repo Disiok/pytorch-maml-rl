@@ -54,7 +54,7 @@ def main(args):
     task_distribution = task_utils.normalize_task_ids(torch.load(args.tasks))
 
     assert(os.path.exists(args.checkpoint))
-    checkpoint = task_utils.normalize_task_ids(torch.load(args.checkpoint))
+    checkpoint = torch.load(args.checkpoint)
 
     sampler = BatchSampler(
         args.env_name,
@@ -161,7 +161,7 @@ if __name__ == '__main__':
         help='random seed')
     parser.add_argument('--env-name', type=str,
         help='name of the environment')
-    parser.add_argument('--gamma', type=float, default=0.95,
+    parser.add_argument('--gamma', type=float, default=0.99,
         help='value of the discount factor gamma')
     parser.add_argument('--tau', type=float, default=1.0,
         help='value of the discount factor for GAE')
@@ -179,13 +179,13 @@ if __name__ == '__main__':
     # Task-specific
     parser.add_argument('--tasks', type=str, default=None,
         help='task distribution')
-    parser.add_argument('--fast-batch-size', type=int, default=20,
+    parser.add_argument('--fast-batch-size', type=int, default=40,
         help='batch size for each individual task')
-    parser.add_argument('--fast-lr', type=float, default=0.5,
+    parser.add_argument('--fast-lr', type=float, default=0.1,
         help='learning rate for the 1-step gradient update of MAML')
 
     # Optimization
-    parser.add_argument('--num-batches', type=int, default=200,
+    parser.add_argument('--num-batches', type=int, default=100,
         help='number of batches')
 
     # Miscellaneous
