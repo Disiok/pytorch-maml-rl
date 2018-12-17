@@ -201,6 +201,7 @@ if __name__ == '__main__':
         help='set the device (cpu or cuda)')
 
     args = parser.parse_args()
+    print(args)
 
     # Create logs and saves folder if they don't exist
     args.out = os.path.expanduser(args.out)

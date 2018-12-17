@@ -125,6 +125,6 @@ CONTINUOUS_ENVS = [
 
     # MAESN sparse environments
     'SparseAntGoalRing-v0',
-    'SparseWheeled-v0'
+    'SparseWheeled-v0',
     'SparsePusher-v0',
 ]
