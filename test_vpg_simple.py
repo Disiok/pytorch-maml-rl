@@ -9,10 +9,9 @@ from torch import optim
 from IPython import embed
 
 from maml_rl.metalearner import MetaLearner
-from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
+from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy, IntrinsicReward
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
-from maml_rl.reward import IntrinsicReward
 from maml_rl.utils.torch_utils import (weighted_mean, detach_distribution,
                                        weighted_normalize)
 
@@ -92,7 +91,7 @@ def main(args):
         int(np.prod(sampler.envs.observation_space.shape)))
     optimizer = optim.SGD(policy.parameters(), lr=1e-2)
 
-    task = sampler.sample_tasks(num_tasks=1, seed=999)[0]
+    task = sampler.sample_tasks(num_tasks=5, seed=999)[0]
     for batch in range(args.num_batches):
         logger.debug('Processing batch {}'.format(batch))
 

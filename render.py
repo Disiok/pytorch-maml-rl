@@ -7,10 +7,9 @@ import logging
 from IPython import embed
 
 from maml_rl.metalearner import MetaLearner
-from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
+from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy, IntrinsicReward
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import TrajectorySampler
-from maml_rl.reward import IntrinsicReward
 
 from tensorboardX import SummaryWriter
 
@@ -44,7 +43,7 @@ def main(args):
         state_dict = torch.load(args.policy_checkpoint)
         policy.load_state_dict(state_dict)
 
-    task = sampler.sample_tasks(num_tasks=1, seed=999)[0]
+    task = sampler.sample_tasks(num_tasks=5, seed=999)[0]
     sampler.reset_task(task)
     episodes = sampler.sample(policy)
 

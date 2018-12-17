@@ -41,8 +41,8 @@ class PusherEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     def _get_obs(self):
         return np.concatenate([
             self.sim.data.qpos.flat[:3],
-            self.sim.data.qvel.flat,
             self.sim.data.geom_xpos[-6:-1, :2].flat,
+            self.sim.data.qvel.flat,
         ]).astype(np.float32).flatten()
 
 
@@ -75,6 +75,7 @@ class PusherTaskEnv(PusherEnv):
             reward = -5 * goal_dist
         else:
             reward = -5 * block_dist
+
         done = False
         infos = dict()
 
