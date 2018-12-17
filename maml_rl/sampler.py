@@ -29,6 +29,7 @@ class TrajectorySampler(object):
             observation = new_observation
 
             if render: 
+                print(info)
                 self.env.render(mode='human')
 
     def reset_task(self, task):

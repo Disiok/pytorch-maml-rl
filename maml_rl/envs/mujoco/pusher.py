@@ -77,7 +77,7 @@ class PusherTaskEnv(PusherEnv):
             reward = -5 * block_dist
 
         done = False
-        infos = dict()
+        infos = dict(block_distance=block_dist, goal_distance=goal_dist, block_choice=self._block_choice)
 
         return (observation, reward, done, infos)
 
