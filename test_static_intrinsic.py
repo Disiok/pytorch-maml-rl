@@ -48,7 +48,7 @@ def main(args):
         json.dump(config, f, indent=2)
 
     assert(os.path.exists(args.tasks))
-    task_distribution = task_utils.normalize_task_ids(torch.load(args.tasks))
+    task_distribution = task_utils.normalize_task_ids(torch.load(args.tasks))[:50]
 
     sampler = StaticIntrinsicBatchSampler(
         args.env_name,

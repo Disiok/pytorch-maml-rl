@@ -51,10 +51,7 @@ def main(args):
         json.dump(config, f, indent=2)
 
     assert(os.path.exists(args.tasks))
-    task_distribution = task_utils.normalize_task_ids(torch.load(args.tasks))
-
-    assert(os.path.exists(args.checkpoint))
-    checkpoint = torch.load(args.checkpoint)
+    task_distribution = task_utils.normalize_task_ids(torch.load(args.tasks))[:50]
 
     sampler = MAESNBatchSampler(
         args.env_name,
@@ -80,7 +77,11 @@ def main(args):
                 default_step_size=args.fast_lr,
                 evaluate_mode=True
             )
-            policy.load_state_dict(checkpoint)
+
+            if args.checkpoint is not None:
+                assert(os.path.exists(args.checkpoint))
+                checkpoint = torch.load(args.checkpoint)
+                policy.load_state_dict(checkpoint)
         else:
             raise NotImplementedError
 
