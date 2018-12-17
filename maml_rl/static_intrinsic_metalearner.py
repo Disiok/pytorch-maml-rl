@@ -63,7 +63,8 @@ class StaticIntrinsicMetaLearner(object):
 
     def inner_loss(self,
                    episodes,
-                   params=None):
+                   params=None,
+                   use_intrinsic=True):
         """
         Compute the inner loss for a one-step gradient update.
         The inner loss is REINFORCE with baseline [2], computed on
@@ -72,12 +73,14 @@ class StaticIntrinsicMetaLearner(object):
         :param episodes      [MAESNBatchEpisode]:
         :param params        [OrderedDict]:
         """
+        intrinsic = self.reward if use_intrinsic else None
+
         # Note: we assume that the baseline is already
         # fitted using extrinsic rewards from train_episodes.
         values = self.baseline(episodes)
         advantages = episodes.gae(
             values,
-            intrinsic=self.reward,
+            intrinsic=intrinsic,
             tau=self.tau
         )
         advantages = weighted_normalize(
@@ -116,7 +119,7 @@ class StaticIntrinsicMetaLearner(object):
         self.baseline.fit(episodes)
 
         # Get the loss on the training episodes.
-        loss = self.inner_loss(episodes)
+        loss = self.inner_loss(episodes, use_intrinsic=True)
 
         # Get the new parameters after a one-step gradient update
         params = self.policy.update_params(
@@ -126,6 +129,35 @@ class StaticIntrinsicMetaLearner(object):
         )
 
         return params
+
+    def adapt_reward(self,
+                     episodes,
+                     policy_params=None,
+                     first_order=False):
+        """
+        Adapt policy network using extrinsic rewards.
+
+        """
+        # Fit the baseline to the training episodes.
+        # Note: We only use extrinsic rewards here.
+        self.baseline.fit(episodes)
+
+        # Get the loss on the training episodes.
+        loss = self.inner_loss(
+            episodes,
+            params=policy_params,
+            use_intrinsic=False
+        )
+
+        # Get the new parameters after a one-step gradient update
+        params = self.reward.update_params(
+            loss,
+            step_size=self.fast_lr,
+            first_order=first_order
+        )
+
+        return params
+
 
     def sample(self, tasks, first_order=False):
         """

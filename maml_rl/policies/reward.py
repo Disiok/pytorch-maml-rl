@@ -1,5 +1,7 @@
 import math
 import torch
+import numpy as np
+
 from torch import nn
 import torch.nn.functional as F
 from torch.distributions import Normal
@@ -31,8 +33,8 @@ class IntrinsicReward(nn.Module):
                 nn.Linear(layer_sizes[i - 1], layer_sizes[i]))
         self.reward = nn.Linear(layer_sizes[-1], 1)
 
-        self.reward_importance = torch.nn.Parameter(torch.Tensor(1))
-        torch.nn.init.constant_(self.reward_importance, reward_importance)
+        self.log_reward_importance = torch.nn.Parameter(torch.Tensor(1))
+        torch.nn.init.constant_(self.log_reward_importance, np.log(reward_importance))
 
         self.apply(weight_init)
 
@@ -47,7 +49,7 @@ class IntrinsicReward(nn.Module):
             output = self.nonlinearity(output)
         reward = F.linear(output, weight=params['reward.weight'],
             bias=params['reward.bias'])
-        return F.tanh(reward) * self.reward_importance
+        return F.tanh(reward) * torch.exp(self.log_reward_importance)
 
     def update_params(self, loss, step_size=0.5, first_order=False):
         """Apply one step of gradient descent on the loss function `loss`, with
@@ -58,9 +60,20 @@ class IntrinsicReward(nn.Module):
             create_graph=not first_order)
         updated_params = OrderedDict()
         for (name, param), grad in zip(self.named_parameters(), grads):
-            if name == 'reward_importance':
+            if name == 'log_reward_importance':
+                updated_params[name] = param
                 continue
 
             updated_params[name] = param - step_size * grad
 
         return updated_params
+
+    def set_parameters(self, params):
+        """
+        Update parameters of the model.
+
+        :param params [OrderedDict]:
+        """
+        for name, param in self.named_parameters():
+            with torch.no_grad():
+                param.data = params[name].data
