@@ -14,6 +14,7 @@ from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
 from maml_rl.utils.torch_utils import (weighted_mean, detach_distribution,
                                        weighted_normalize)
+from maml_rl.envs import CONTINUOUS_ENVS
 
 from tensorboardX import SummaryWriter
 
@@ -47,9 +48,7 @@ def inner_loss(policy, baseline, episodes, params=None):
     return loss
 
 def main(args):
-    continuous_actions = (args.env_name in ['Wheeled-v0', 'Pusher-v0', 'AntVel-v1', 'AntDir-v1',
-        'AntPos-v0', 'AntGoalRing-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
-        '2DNavigation-v0'])
+    continuous_actions = (args.env_name in CONTINUOUS_ENVS)
 
     writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
     save_folder = './saves/{0}'.format(args.output_folder)
