@@ -48,11 +48,20 @@ def main(args):
             int(np.prod(sampler.envs.action_space.shape)),
             hidden_sizes=(args.hidden_size,) * args.num_layers)
 
+        if args.checkpoint is not None:
+            assert(os.path.exists(args.checkpoint))
+            checkpoint = torch.load(args.checkpoint)
+            policy.load_state_dict(checkpoint)
     else:
         policy = CategoricalMLPPolicy(
             int(np.prod(sampler.envs.observation_space.shape)),
             sampler.envs.action_space.n,
             hidden_sizes=(args.hidden_size,) * args.num_layers)
+
+        if args.checkpoint is not None:
+            assert(os.path.exists(args.checkpoint))
+            checkpoint = torch.load(args.checkpoint)
+            policy.load_state_dict(checkpoint)
 
     baseline = LinearFeatureBaseline(
         int(np.prod(sampler.envs.observation_space.shape)))
@@ -60,7 +69,7 @@ def main(args):
     metalearner = MetaLearner(sampler, policy, baseline, gamma=args.gamma,
         fast_lr=args.fast_lr, tau=args.tau, device=args.device)
 
-    for batch in range(args.num_batches):
+    for batch in range(args.start_batch, args.num_batches):
         start_time = time.time()
         tasks = random.sample(task_distribution, args.meta_batch_size)
         task_sampling_time = time.time()
@@ -107,6 +116,10 @@ if __name__ == '__main__':
         help='value of the discount factor for GAE')
     parser.add_argument('--first-order', action='store_true',
         help='use the first-order approximation of MAML')
+    parser.add_argument('--checkpoint', type=str,
+        help='Load a policy checkpoint for MAML training')
+    parser.add_argument('--start-batch', type=int, default=0, 
+        help='Starting batch for loaded policy')
 
     # Policy network (relu activation function)
     parser.add_argument('--hidden-size', type=int, default=100,
