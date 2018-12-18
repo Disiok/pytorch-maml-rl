@@ -2,7 +2,6 @@ import os
 import numpy as np
 from gym import utils
 from gym.envs.mujoco import mujoco_env
-from IPython import embed
 
 class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self, model_path='ant_maesn.xml'):
@@ -260,7 +259,7 @@ class AntGoalRingEnv(AntPosEnv):
         self.do_simulation(action, self.frame_skip)
         xyposafter = self.get_body_com("torso")[:2]
 
-        if self._sparse and np.linalg.norm(xyposafter - self._goal_pos) > 0.8:
+        if self._sparse and np.linalg.norm(xyposafter - self._goal_pos) > 0.2:
             goal_reward = -np.sum(np.abs(self._goal_pos)) + 4.0
         else:
             goal_reward = -np.sum(np.abs(xyposafter - self._goal_pos)) + 4.0

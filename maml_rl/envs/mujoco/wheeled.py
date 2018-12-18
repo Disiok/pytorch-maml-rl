@@ -1,4 +1,3 @@
-from IPython import embed
 import random
 import os
 import numpy as np
@@ -56,15 +55,27 @@ class WheeledTaskEnv(WheeledEnv):
         self._sparse = sparse
         super(WheeledTaskEnv, self).__init__()
 
+    @property
+    def action_scaling(self):
+        if (not hasattr(self, 'action_space')) or (self.action_space is None):
+            return 1.0
+        if self._action_scaling is None:
+            lb, ub = self.action_space.low, self.action_space.high
+            self._action_scaling = 0.5 * (ub - lb)
+        return self._action_scaling
+
+
     def step(self, action):
         self.do_simulation(action, self.frame_skip)
         observation = self._get_obs()
 
-        ctrl_cost = 1e-1 * 0.5 * np.sum(np.square(action))
-        goal_distance = np.linalg.norm(observation[:2] - self._goal_pos)
-        goal_position = np.linalg.norm(self._goal_pos)
+        ctrl_cost = 1e-2 * 0.5 * np.sum(np.square(action / self.action_scaling))
+        goal_distance = np.sum(np.abs(observation[:2] - self._goal_pos))
+        goal_position = np.sum(np.abs(self._goal_pos))
+        #goal_distance = np.linalg.norm(observation[:2] - self._goal_pos)
+        #goal_position = np.linalg.norm(self._goal_pos)
 
-        if self._sparse and goal_distance > 0.8 :
+        if self._sparse and np.linalg.norm(observation[:2] - self._goal_pos) > 0.8:
             goal_reward = -goal_position
         else:
             goal_reward = -goal_distance
