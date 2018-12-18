@@ -101,6 +101,7 @@ def main(args):
             tau=args.tau, device=args.device
         )
 
+        fast_lr = args.fast_lr
         train_episodes = None
         for batch in range(args.num_batches):
             sampler.reset_task(task)
@@ -115,7 +116,9 @@ def main(args):
             logger.debug('Finished sampling train episodes in {:.3f} seconds.'.format(time.time() - start))
 
             start = time.time()
-            policy_params = metalearner.adapt_policy(train_episodes)
+            metalearner.baseline.fit(train_episodes)
+            policy_loss = metalearner.inner_loss(train_episodes, use_intrinsic=True)
+            policy_params = policy.update_params(policy_loss, step_size=fast_lr, first_order=False)
             logger.debug('Finished policy adaptation step in {:.3f} seconds.'.format(time.time() - start))
 
             start = time.time()
@@ -128,11 +131,16 @@ def main(args):
             logger.debug('Finished sampling val episodes in {:.3f} seconds.'.format(time.time() - start))
 
             start = time.time()
-            reward_params = metalearner.adapt_reward(val_episodes, policy_params=policy_params)
+            metalearner.baseline.fit(val_episodes)
+            reward_loss = metalearner.inner_loss(val_episodes, params=policy_params, use_intrinsic=False)
+            reward_params = reward.update_params(reward_loss, step_size=fast_lr, first_order=False)
             logger.debug('Finished reward adaptation step in {:.3f} seconds.'.format(time.time() - start))
 
             policy.set_parameters(policy_params)
             reward.set_parameters(reward_params)
+
+            if batch >= 1:
+                fast_lr /= 2
 
             # Compute extrinsic and intrinsic rewards.
             if not task['task_id'] in task_extrinsic_rewards:
