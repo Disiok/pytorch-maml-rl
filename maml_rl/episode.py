@@ -4,15 +4,17 @@ import torch
 import torch.nn.functional as F
 
 class BatchEpisodes(object):
-    def __init__(self, batch_size, gamma=0.95, device='cpu', delay=20):
+    def __init__(self, batch_size, gamma=0.95, device='cpu', delay=None, sparse=False):
         self.batch_size = batch_size
         self.gamma = gamma
         self.device = device
         self.delay = delay
+        self.sparse = sparse
 
         self._observations_list = [[] for _ in range(batch_size)]
         self._actions_list = [[] for _ in range(batch_size)]
         self._rewards_list = [[] for _ in range(batch_size)]
+        self._sparse_rewards_list = [[] for _ in range(batch_size)]
         self._mask_list = []
 
         self._observations = None
@@ -53,16 +55,21 @@ class BatchEpisodes(object):
     @property
     def rewards(self):
         if self._rewards is None:
+            if self.sparse:
+                rewards_list = self._sparse_rewards_list
+            else:
+                rewards_list = self._rewards_list
+
             rewards = np.zeros((len(self), self.batch_size), dtype=np.float32)
             for i in range(self.batch_size):
-                length = len(self._rewards_list[i])
-                rewards[:length, i] = np.stack(self._rewards_list[i], axis=0)
+                length = len(rewards_list[i])
+                rewards[:length, i] = np.stack(rewards_list[i], axis=0)
 
             # NOTE(suo): Only gives rewards every self.delay steps, or termination
             if self.delay is not None:
                 delayed_rewards = np.zeros((len(self), self.batch_size), dtype=np.float32)
                 for i in range(self.batch_size):
-                    length = len(self._rewards_list[i])
+                    length = len(rewards_list[i])
                     for step in range(self.delay - 1, length, self.delay):
                         delayed_rewards[step, i] = np.sum(rewards[step + 1 - self.delay: step + 1, i], axis=0)
                     delayed_rewards[length - 1, i] = np.sum(rewards[length - self.delay: length, i], axis=0)
@@ -144,14 +151,18 @@ class BatchEpisodes(object):
 
         return advantages
 
-    def append(self, observations, actions, rewards, batch_ids):
-        for observation, action, reward, batch_id in zip(
-                observations, actions, rewards, batch_ids):
+    def append(self, observations, actions, rewards, batch_ids, infos):
+        for observation, action, reward, batch_id, info in zip(
+                observations, actions, rewards, batch_ids, infos):
             if batch_id is None:
                 continue
             self._observations_list[batch_id].append(observation.astype(np.float32))
             self._actions_list[batch_id].append(action.astype(np.float32))
             self._rewards_list[batch_id].append(reward.astype(np.float32))
+            self._sparse_rewards_list[batch_id].append(info['sparse_reward'].astype(np.float32))
 
     def __len__(self):
-        return max(map(len, self._rewards_list))
+        if self.sparse:
+            return max(map(len, self._sparse_rewards_list))
+        else:
+            return max(map(len, self._rewards_list))

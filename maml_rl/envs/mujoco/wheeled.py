@@ -49,11 +49,10 @@ class WheeledTaskEnv(WheeledEnv):
     """Pusher environment with multiple tasks and sparse rewards:
     (https://github.com/RussellM2020/maesn_suite/blob/master/maesn/rllab/envs/mujoco/pusher.py)
     """
-    def __init__(self, task={}, sparse=False):
+    def __init__(self, task={}):
         self._task = task
         self._goal_pos = task.get('position', np.zeros((2,), dtype=np.float32))
         self._action_scaling = None
-        self._sparse = sparse
         super(WheeledTaskEnv, self).__init__()
 
     def step(self, action):
@@ -62,14 +61,15 @@ class WheeledTaskEnv(WheeledEnv):
 
         ctrl_cost = 1e-1 * 0.5 * np.sum(np.square(action))
 
-        if self._sparse and np.linalg.norm(observation[:2] - self._goal_pos) > 0.8 :
-            reward = -np.linalg.norm(self._goal_pos) - ctrl_cost
+        dense_reward = -np.linalg.norm(observation[:2] - self._goal_pos) - ctrl_cost
+        if np.linalg.norm(observation[:2] - self._goal_pos) > 0.8 :
+            sparse_reward = -np.linalg.norm(self._goal_pos) - ctrl_cost
         else:
-            reward = -np.linalg.norm(observation[:2] - self._goal_pos) - ctrl_cost
+            sparse_reward = dense_reward
 
         done = False
-        infos = dict()
-        return (observation, reward, done, infos)
+        infos = dict(sparse_reward=sparse_reward)
+        return (observation, dense_reward, done, infos)
 
     def sample_tasks(self, num_tasks, seed=None):
         if seed is not None:

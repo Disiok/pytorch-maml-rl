@@ -79,26 +79,6 @@ register(
     max_episode_steps=200
 )
 
-register(
-    'SparsePusher-v0',
-    entry_point='maml_rl.envs.utils:mujoco_wrapper',
-    kwargs={'entry_point': 'maml_rl.envs.mujoco.pusher:PusherTaskEnv', 'sparse': True},
-    max_episode_steps=200
-)
-
-register(
-    'SparseAntGoalRing-v0',
-    entry_point='maml_rl.envs.utils:mujoco_wrapper',
-    kwargs={'entry_point': 'maml_rl.envs.mujoco.ant:AntGoalRingEnv', 'sparse': True},
-    max_episode_steps=200
-)
-
-register(
-    'SparseWheeled-v0',
-    entry_point='maml_rl.envs.utils:mujoco_wrapper',
-    kwargs={'entry_point': 'maml_rl.envs.mujoco.wheeled:WheeledTaskEnv', 'sparse': True},
-    max_episode_steps=200
-)
 
 # 2D Navigation
 # ----------------------------------------
@@ -108,3 +88,19 @@ register(
     entry_point='maml_rl.envs.navigation:Navigation2DEnv',
     max_episode_steps=100
 )
+
+
+CONTINUOUS_ENVS = [
+    # MAML environments
+    'AntVel-v1',
+    'AntDir-v1',
+    'AntPos-v0',
+    'HalfCheetahVel-v1',
+    'HalfCheetahDir-v1',
+    '2DNavigation-v0',
+
+    # MAESN environments
+    'AntGoalRing-v0',
+    'Wheeled-v0',
+    'Pusher-v0',
+]

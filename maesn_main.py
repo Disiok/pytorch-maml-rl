@@ -216,6 +216,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
 
+    # Slurm
+    if 'SLURM_JOB_ID' in os.environ:
+        args.out += '-{0}'.format(os.environ['SLURM_JOB_ID'])
+        
     # Create logs and saves folder if they don't exist
     args.out = os.path.expanduser(args.out)
     if not os.path.exists(args.out):
@@ -225,8 +229,5 @@ if __name__ == '__main__':
     args.device = torch.device(args.device
         if torch.cuda.is_available() else 'cpu')
 
-    # Slurm
-    if 'SLURM_JOB_ID' in os.environ:
-        args.output_folder += '-{0}'.format(os.environ['SLURM_JOB_ID'])
 
     main(args)

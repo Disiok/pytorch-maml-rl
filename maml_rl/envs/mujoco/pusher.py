@@ -50,13 +50,12 @@ class PusherTaskEnv(PusherEnv):
     """Pusher environment with multiple tasks and sparse rewards:
     (https://github.com/RussellM2020/maesn_suite/blob/master/maesn/rllab/envs/mujoco/pusher.py)
     """
-    def __init__(self, task={}, sparse=False):
+    def __init__(self, task={}):
         self._task = task
         self._block_choice = task.get('block_choice', 0)
         self._goal = task.get('goal', np.array([0., 0.]))
         self._block_positions = task.get('block_positions', np.zeros((13, 1)))
         self._action_scaling = None
-        self._sparse = sparse
         super(PusherTaskEnv, self).__init__()
 
     def step(self, action):
@@ -71,21 +70,19 @@ class PusherTaskEnv(PusherEnv):
         block_dist = np.linalg.norm(self._goal - curr_block_pos)
         goal_dist = np.linalg.norm(self._goal)
 
-        if self._sparse and block_dist > 0.2:
-            reward = -5 * goal_dist
+        dense_reward = -5 * block_dist
+        if block_dist > 0.2:
+            sparse_reward = -5 * goal_dist
         else:
-            reward = -5 * block_dist
+            sparse_reward = dense_reward
         done = False
-        infos = dict()
+        infos = dict(sparse_reward=sparse_reward)
 
-        return (observation, reward, done, infos)
+        return (observation, dense_reward, done, infos)
 
     def sample_tasks(self, num_tasks, seed=None):
         if seed is not None:
             np.random.seed(seed)
-
-        assert(num_tasks % 5 == 0)
-        num_tasks = int(num_tasks / 5)
 
         # TODO(suo): Clean up this code
         tasks = []

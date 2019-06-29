@@ -1,3 +1,4 @@
+import logging
 from IPython import embed
 
 import torch
@@ -8,6 +9,8 @@ from torch.distributions.kl import kl_divergence
 from maml_rl.utils.torch_utils import (weighted_mean, detach_distribution,
                                        weighted_normalize)
 from maml_rl.utils.optimization import conjugate_gradient
+
+logger = logging.getLogger(__name__)
 
 class IntrinsicMetaLearner(object):
     """Meta-learner with intrinsic rewards
@@ -75,20 +78,21 @@ class IntrinsicMetaLearner(object):
         for all the tasks `tasks`.
         """
         episodes = []
-        for task in tasks:
+        for task_ind, task in enumerate(tasks):
             self.sampler.reset_task(task)
             train_episodes = self.sampler.sample(self.policy,
-                gamma=self.gamma, device=self.device)
+                gamma=self.gamma, device=self.device, sparse=True)
             policy_params = self.adapt(train_episodes, first_order=first_order)
 
             intermediate_episodes = self.sampler.sample(self.policy, params=policy_params,
-                gamma=self.gamma, device=self.device)
+                gamma=self.gamma, device=self.device, sparse=True)
             reward_params = self.adapt_reward_policy(intermediate_episodes, first_order=first_order, policy_params=policy_params)
             final_policy_params = self.adapt(intermediate_episodes, first_order=first_order, reward_params=reward_params)
 
             valid_episodes = self.sampler.sample(self.policy, params=final_policy_params,
                 gamma=self.gamma, device=self.device)
             episodes.append((train_episodes, intermediate_episodes, valid_episodes))
+            logger.debug('Finished sampling for task {}: {}'.format(task_ind, task))
         return episodes
 
     def kl_divergence(self, episodes, old_pis=None):
@@ -181,7 +185,7 @@ class IntrinsicMetaLearner(object):
     def step(self, episodes, max_kl=1e-3, cg_iters=10, cg_damping=1e-2,
              ls_max_steps=10, ls_backtrack_ratio=0.5):
 
-        # self.step_reward_policy(episodes)
+        self.step_reward_policy(episodes)
         return self.step_policy(episodes, max_kl=max_kl, cg_iters=cg_iters,
             cg_damping=cg_damping, ls_max_steps=ls_max_steps,
             ls_backtrack_ratio=ls_backtrack_ratio)

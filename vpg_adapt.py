@@ -37,15 +37,10 @@ CONTINUOUS_ENVS = [
     'HalfCheetahVel-v1',
     'HalfCheetahDir-v1',
 
-    # MAESN dense environments
+    # MAESN environments
     'AntGoalRing-v0',
     'Wheeled-v0'
     '2DNavigation-v0',
-
-    # MAESN sparse environments
-    'SparseAntGoalRing-v0',
-    'SparseWheeled-v0'
-    'Sparse2DNavigation-v0',
 ]
 
 

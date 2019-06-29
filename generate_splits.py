@@ -12,14 +12,16 @@ from maml_rl.maesn_sampler import MAESNBatchSampler
 
 
 CONTINUOUS_ENVS = [
-    'Pusher-v0',
     'AntVel-v1',
     'AntDir-v1',
     'AntPos-v0',
-    'AntGoalRing-v0',
     'HalfCheetahVel-v1',
     'HalfCheetahDir-v1',
     '2DNavigation-v0',
+
+    'AntGoalRing-v0',
+    'Pusher-v0',
+    'Wheeled-v0',
 ]
 
 

@@ -13,31 +13,19 @@ from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
 from maml_rl.reward import IntrinsicReward
+from maml_rl.envs import CONTINUOUS_ENVS
 
 from tensorboardX import SummaryWriter
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-CONTINUOUS_ENVS = [
-    # MAML environments
-    'Pusher-v0',
-    'AntVel-v1',
-    'AntDir-v1',
-    'AntPos-v0',
-    'HalfCheetahVel-v1',
-    'HalfCheetahDir-v1',
 
-    # MAESN dense environments
-    'AntGoalRing-v0',
-    'Wheeled-v0'
-    '2DNavigation-v0',
-
-    # MAESN sparse environments
-    'SparseAntGoalRing-v0',
-    'SparseWheeled-v0'
-    'Sparse2DNavigation-v0',
-]
+def normalize_task_ids(task_distribution):
+    task_distribution = sorted(task_distribution, key=lambda t: t['task_id'])
+    for task_id, task in enumerate(task_distribution):
+        task['task_id'] = task_id
+    return task_distribution
 
 def total_rewards(episodes_rewards, aggregation=torch.mean):
     rewards = torch.mean(torch.stack([aggregation(torch.sum(rewards, dim=0))
@@ -117,6 +105,11 @@ def main(args):
             total_rewards([ep[0].rewards for ep in episodes]), batch)
         writer.add_scalar('meta-train/after_update',
             total_rewards([ep[-1].rewards for ep in episodes]), batch)
+        if args.intrinsic_reward:
+            writer.add_scalar('meta-train/before_update_intrinsic',
+                total_rewards([ep[0].intrinsic_rewards for ep in episodes]), batch)
+            writer.add_scalar('meta-train/after_update_intrinsic',
+                total_rewards([ep[-1].intrinsic_rewards for ep in episodes]), batch)
         writer.add_scalar('meta-train/step_size', step_size, batch)
         writer.add_scalar('meta-train/ls_iter', ls_iter, batch)
 
@@ -197,6 +190,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
 
+    # Slurm
+    if 'SLURM_JOB_ID' in os.environ:
+        args.out += '-{0}'.format(os.environ['SLURM_JOB_ID'])
+
     # Create logs and saves folder if they don't exist
     args.out = os.path.expanduser(args.out)
     if not os.path.exists(args.out):
@@ -205,8 +202,5 @@ if __name__ == '__main__':
     # Device
     args.device = torch.device(args.device
         if torch.cuda.is_available() else 'cpu')
-    # Slurm
-    if 'SLURM_JOB_ID' in os.environ:
-        args.output_folder += '-{0}'.format(os.environ['SLURM_JOB_ID'])
 
     main(args)

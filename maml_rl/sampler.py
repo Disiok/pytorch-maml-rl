@@ -50,8 +50,8 @@ class BatchSampler(object):
             queue=self.queue)
         self._env = gym.make(env_name)
 
-    def sample(self, policy, params=None, gamma=0.95, device='cpu', delay=20):
-        episodes = BatchEpisodes(batch_size=self.batch_size, gamma=gamma, device=device, delay=delay)
+    def sample(self, policy, params=None, gamma=0.95, device='cpu', delay=None, sparse=False):
+        episodes = BatchEpisodes(batch_size=self.batch_size, gamma=gamma, device=device, delay=delay, sparse=sparse)
         for i in range(self.batch_size):
             self.queue.put(i)
         for _ in range(self.num_workers):
@@ -63,8 +63,8 @@ class BatchSampler(object):
                 observations_tensor = torch.from_numpy(observations).to(device=device)
                 actions_tensor = policy(observations_tensor, params=params).sample()
                 actions = actions_tensor.cpu().numpy()
-            new_observations, rewards, dones, new_batch_ids, _ = self.envs.step(actions)
-            episodes.append(observations, actions, rewards, batch_ids)
+            new_observations, rewards, dones, new_batch_ids, infos = self.envs.step(actions)
+            episodes.append(observations, actions, rewards, batch_ids, infos)
             observations, batch_ids = new_observations, new_batch_ids
         return episodes
 

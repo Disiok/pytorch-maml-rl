@@ -6,13 +6,13 @@ import json
 import logging
 import time
 from torch import optim
-from IPython import embed
 
 from maml_rl.metalearner import MetaLearner
 from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
 from maml_rl.reward import IntrinsicReward
+from maml_rl.envs import CONTINUOUS_ENVS
 from maml_rl.utils.torch_utils import (weighted_mean, detach_distribution,
                                        weighted_normalize)
 
@@ -41,16 +41,14 @@ def inner_loss(policy, baseline, episodes, params=None):
         log_probs = torch.sum(log_probs, dim=2)
     loss = -weighted_mean(log_probs * advantages, dim=0,
         weights=episodes.mask)
-    
-    if loss < -400:
-        embed()
 
+    if abs(loss) > 200:
+        import ipdb; ipdb.set_trace()
+    
     return loss
 
 def main(args):
-    continuous_actions = (args.env_name in ['Wheeled-v0', 'Pusher-v0', 'AntVel-v1', 'AntDir-v1',
-        'AntPos-v0', 'AntGoalRing-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
-        '2DNavigation-v0'])
+    continuous_actions = (args.env_name in CONTINUOUS_ENVS)
 
     writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
     save_folder = './saves/{0}'.format(args.output_folder)
@@ -97,14 +95,14 @@ def main(args):
         logger.debug('Processing batch {}'.format(batch))
 
         sampler.reset_task(task)
-        train_episodes = sampler.sample(policy, gamma=args.gamma, device=args.device)
+        train_episodes = sampler.sample(policy, gamma=args.gamma, device=args.device, sparse=False)
 
         # Fit the baseline to the training episodes
         baseline.fit(train_episodes)
         # Get the loss on the training episodes
         optimizer.zero_grad()
         loss = inner_loss(policy, baseline, train_episodes)
-        print(loss.item())
+
         loss.backward()
         optimizer.step()
         episodes = [train_episodes]
@@ -113,6 +111,8 @@ def main(args):
         writer.add_scalar('meta-test/loss', loss.item(), batch)
         writer.add_scalar('meta-test/total_rewards',
             total_rewards([ep.rewards for ep in episodes]), batch)
+        print('meta-test/loss {}'.format(loss.item()))
+        print('meta-test/total_rewards {}'.format(total_rewards([ep.rewards for ep in episodes])))
 
         # Save policy network
         with open(os.path.join(save_folder,
