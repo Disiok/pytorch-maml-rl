@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 
 class BatchEpisodes(object):
-    def __init__(self, batch_size, gamma=0.95, device='cpu', delay=20):
+    def __init__(self, batch_size, gamma=0.95, device='cpu', delay=None):
         self.batch_size = batch_size
         self.gamma = gamma
         self.device = device
