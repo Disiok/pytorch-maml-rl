@@ -49,7 +49,7 @@ class IntrinsicReward(nn.Module):
             output = self.nonlinearity(output)
         reward = F.linear(output, weight=params['reward.weight'],
             bias=params['reward.bias'])
-        return F.tanh(reward) * torch.exp(self.log_reward_importance)
+        return torch.tanh(reward) * torch.exp(self.log_reward_importance)
 
     def update_params(self, loss, step_size=0.5, first_order=False):
         """Apply one step of gradient descent on the loss function `loss`, with

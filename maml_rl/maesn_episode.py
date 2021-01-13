@@ -29,12 +29,15 @@ class MAESNBatchEpisodes(object):
         self._observations_list = [[] for _ in range(batch_size)]
         self._actions_list = [[] for _ in range(batch_size)]
         self._rewards_list = [[] for _ in range(batch_size)]
+        self._sparse_rewards_list = [[] for _ in range(batch_size)]
         self._mask_list = []
 
         self._observations = None
         self._actions = None
         self._rewards = None
+        self._sparse_rewards = None
         self._returns = None
+        self._sparse_returns = None
         self._task_ids = None
         self._mask = None
 
@@ -88,6 +91,21 @@ class MAESNBatchEpisodes(object):
         return self._rewards
 
     @property
+    def sparse_rewards(self):
+        """
+        Return a tensor of sparse rewards.
+
+        :return [torch.Tensor]: A [H x N] reward tensor.
+        """
+        if self._sparse_rewards is None:
+            rewards = np.zeros((len(self), self.batch_size), dtype=np.float32)
+            for i in range(self.batch_size):
+                length = len(self._sparse_rewards_list[i])
+                rewards[:length, i] = np.stack(self._sparse_rewards_list[i], axis=0)
+            self._sparse_rewards = torch.from_numpy(rewards).to(self.device)
+        return self._sparse_rewards
+
+    @property
     def returns(self):
         """
         Return a tensor of returns.
@@ -104,6 +122,24 @@ class MAESNBatchEpisodes(object):
                 returns[i] = return_
             self._returns = torch.from_numpy(returns).to(self.device)
         return self._returns
+
+    @property
+    def sparse_returns(self):
+        """
+        Return a tensor of sparse returns.
+
+        :return [torch.Tensor]: A [H x N] return tensor.
+        """
+        if self._sparse_returns is None:
+            return_ = np.zeros(self.batch_size, dtype=np.float32)
+            returns = np.zeros((len(self), self.batch_size), dtype=np.float32)
+            rewards = self.sparse_rewards.cpu().numpy()
+            mask = self.mask.cpu().numpy()
+            for i in range(len(self) - 1, -1, -1):
+                return_ = self.gamma * return_ + rewards[i] * mask[i]
+                returns[i] = return_
+            self._sparse_returns = torch.from_numpy(returns).to(self.device)
+        return self._sparse_returns
 
     @property
     def task_ids(self):
@@ -168,7 +204,7 @@ class MAESNBatchEpisodes(object):
         intrinsic_returns = torch.stack(returns, dim=0)
         return intrinsic_returns
 
-    def gae(self, values, intrinsic=None, tau=1.0):
+    def gae(self, values, intrinsic=None, tau=1.0, sparse=False):
         """
         Compute the Generalized Advantage Estimate.
 
@@ -182,6 +218,11 @@ class MAESNBatchEpisodes(object):
         values = values.squeeze(2).detach()
         values = torch.nn.functional.pad(values * self.mask, (0, 0, 0, 1))
 
+        if sparse:
+            extrinsic_rewards = self.rewards
+        else:
+            extrinsic_rewards = self.sparse_rewards
+
         mixed_rewards = self.rewards + self.intrinsic_rewards(intrinsic)
         deltas = mixed_rewards + self.gamma * values[1:] - values[:-1]
         advantages = torch.zeros_like(deltas).float()
@@ -192,7 +233,7 @@ class MAESNBatchEpisodes(object):
 
         return advantages
 
-    def append(self, observations, actions, rewards, batch_ids):
+    def append(self, observations, actions, rewards, batch_ids, infos):
         """
         Add a batch of transition tuples to the relevant episodes.
 
@@ -201,14 +242,15 @@ class MAESNBatchEpisodes(object):
         :param rewards      [np.array]:   A [N'] rewards np.array.
         :param batch_ids    [tuple<int>]: A list of batch ids.
         """
-        zipped = zip(observations, actions, rewards, batch_ids)
-        for observation, action, reward, batch_id in zipped:
+        zipped = zip(observations, actions, rewards, batch_ids, infos)
+        for observation, action, reward, batch_id, info in zipped:
             if batch_id is None:
                 continue
 
             self._observations_list[batch_id].append(observation.astype(np.float32))
             self._actions_list[batch_id].append(action.astype(np.float32))
             self._rewards_list[batch_id].append(reward.astype(np.float32))
+            self._sparse_rewards_list[batch_id].append(info['reward_sparse'].astype(np.float32))
 
     def __len__(self):
         """

@@ -75,14 +75,25 @@ class WheeledTaskEnv(WheeledEnv):
         #goal_distance = np.linalg.norm(observation[:2] - self._goal_pos)
         #goal_position = np.linalg.norm(self._goal_pos)
 
-        if self._sparse and np.linalg.norm(observation[:2] - self._goal_pos) > 0.8:
-            goal_reward = -goal_position
+        dense_goal_reward = -goal_distance
+        dense_reward = dense_goal_reward - ctrl_cost
+
+        if np.linalg.norm(observation[:2] - self._goal_pos) > 0.8:
+            sparse_goal_reward = -goal_position
         else:
-            goal_reward = -goal_distance
-        reward = goal_reward - ctrl_cost
+            sparse_goal_reward = dense_goal_reward
+        sparse_reward = sparse_goal_reward - ctrl_cost
+
+        if self._sparse:
+            goal_reward = sparse_goal_reward
+            reward = sparse_reward
+        else:
+            goal_reward = dense_goal_reward
+            reward = dense_reward
 
         done = False
-        infos = dict(reward_goal=goal_reward, reward_ctrl=-ctrl_cost, reward_total=reward)
+        infos = dict(reward_goal=goal_reward, reward_ctrl=-ctrl_cost, reward_total=reward, 
+                     reward_sparse=sparse_reward)
 
         return (observation, reward, done, infos)
 

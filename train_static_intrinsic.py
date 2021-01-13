@@ -1,7 +1,6 @@
 #
 #
 #
-import maml_rl.envs
 import gym
 import json
 import time
@@ -10,6 +9,7 @@ import random
 import logging
 import numpy as np
 
+import maml_rl.envs
 from maml_rl.envs import CONTINUOUS_ENVS
 from maml_rl.policies import NormalMLPPolicy, IntrinsicReward
 from maml_rl.baseline import LinearFeatureBaseline
@@ -47,7 +47,7 @@ def main(args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    continuous_actions = (args.env_name in CONTINUOUS_ENVS)
+    assert(args.env_name in CONTINUOUS_ENVS)
     writer = SummaryWriter(os.path.join(args.out, 'logs'))
     save_folder = os.path.join(args.out, 'saves')
 
@@ -68,20 +68,17 @@ def main(args):
         num_workers=args.num_workers
     )
 
-    if continuous_actions:
-        policy = NormalMLPPolicy(
-            int(np.prod(sampler.envs.observation_space.shape)),
-            int(np.prod(sampler.envs.action_space.shape)),
-            (args.hidden_size,) * args.num_layers
-        )
-        reward = IntrinsicReward(
-            int(np.prod(sampler.envs.observation_space.shape)) +
-            int(np.prod(sampler.envs.action_space.shape)),
-            hidden_sizes=(args.hidden_size,)*args.num_layers,
-            reward_importance=args.intrinsic_weight
-        )
-    else:
-        raise NotImplementedError
+    policy = NormalMLPPolicy(
+        int(np.prod(sampler.envs.observation_space.shape)),
+        int(np.prod(sampler.envs.action_space.shape)),
+        (args.hidden_size,) * args.num_layers
+    )
+    reward = IntrinsicReward(
+        int(np.prod(sampler.envs.observation_space.shape)) +
+        int(np.prod(sampler.envs.action_space.shape)),
+        hidden_sizes=(args.hidden_size,)*args.num_layers,
+        reward_importance=args.intrinsic_weight
+    )
 
     baseline = LinearFeatureBaseline(
         int(np.prod(sampler.envs.observation_space.shape))
@@ -102,27 +99,7 @@ def main(args):
         episodes = metalearner.sample(tasks, first_order=args.first_order)
         logger.debug('Finished sampling episodes in {:.3f} seconds.'.format(time.time() - start))
 
-        writer.add_scalar(
-            'intrinsic_rewards/before_update',
-            torch_utils.total_rewards([ep.intrinsic_rewards(reward) for ep, _ in episodes]),
-            batch
-        )
-        writer.add_scalar(
-            'intrinsic_rewards/after_update',
-            torch_utils.total_rewards([ep.intrinsic_rewards(reward) for _, ep in episodes]),
-            batch
-        )
-
-        writer.add_scalar(
-            'mixed_rewards/before_update',
-            torch_utils.total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for ep, _ in episodes]),
-            batch
-        )
-        writer.add_scalar(
-            'mixed_rewards/after_update',
-            torch_utils.total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for _, ep in episodes]),
-            batch
-        )
+        log_episodes(writer, episodes, reward, batch)
 
         start = time.time()
         policy_step, reward_step = metalearner.step(
@@ -135,44 +112,86 @@ def main(args):
         )
         logger.debug('Finished metalearner step in {:.3f} seconds.'.format(time.time() - start))
 
-        # Tensorboard
-        writer.add_scalar('total_rewards/before_update',
-            torch_utils.total_rewards([ep.rewards for ep, _ in episodes]), batch)
-        writer.add_scalar('total_rewards/after_update',
-            torch_utils.total_rewards([ep.rewards for _, ep in episodes]), batch)
+        log_policies(writer, policy, reward, policy_step, reward_step, batch)
+        save_policies(policy, reward, save_folder)
 
-        for name, param in reward.named_parameters():
-            writer.add_histogram('reward/' + name, param.detach().cpu().numpy(), batch)
 
-        for name, param in policy.named_parameters():
-            writer.add_histogram('policy/' + name, param.detach().cpu().numpy(), batch)
+def save_policies(policy, reward, save_folder):
+    # Save policy network
+    save_file = os.path.join(save_folder, 'policy-{0}.pt'.format(batch))
+    with open(save_file, 'wb') as f:
+        torch.save(policy.state_dict(), f)
 
-        policy_parameters = []
-        for (name, param) in policy.named_parameters():
-            policy_parameters.append(param.clone())
+    # Save reward network
+    save_file = os.path.join(save_folder, 'reward-{0}.pt'.format(batch))
+    with open(save_file, 'wb') as f:
+        torch.save(reward.state_dict(), f)
 
-        reward_parameters = []
-        for (name, param) in reward.named_parameters():
-            reward_parameters.append(param.clone())
 
-        vector_to_parameters(policy_step.detach(), policy_parameters)
-        vector_to_parameters(reward_step.detach(), reward_parameters)
+def log_policies(writer, policy, reward, policy_step, reward_step, batch):
+    for name, param in reward.named_parameters():
+        writer.add_histogram('reward/' + name, param.detach().cpu().numpy(), batch)
 
-        for (name, param), grad in zip(reward.named_parameters(), reward_parameters):
-            writer.add_histogram('reward_grad/' + name, grad.detach().cpu().numpy(), batch)
+    for name, param in policy.named_parameters():
+        writer.add_histogram('policy/' + name, param.detach().cpu().numpy(), batch)
 
-        for (name, param), grad in zip(policy.named_parameters(), policy_parameters):
-            writer.add_histogram('policy_grad/' + name, grad.detach().cpu().numpy(), batch)
+    policy_parameters = []
+    for (name, param) in policy.named_parameters():
+        policy_parameters.append(param.clone())
 
-        # Save policy network
-        save_file = os.path.join(save_folder, 'policy-{0}.pt'.format(batch))
-        with open(save_file, 'wb') as f:
-            torch.save(policy.state_dict(), f)
+    reward_parameters = []
+    for (name, param) in reward.named_parameters():
+        reward_parameters.append(param.clone())
 
-        # Save reward network
-        save_file = os.path.join(save_folder, 'reward-{0}.pt'.format(batch))
-        with open(save_file, 'wb') as f:
-            torch.save(reward.state_dict(), f)
+    vector_to_parameters(policy_step.detach(), policy_parameters)
+    vector_to_parameters(reward_step.detach(), reward_parameters)
+
+    for (name, param), grad in zip(reward.named_parameters(), reward_parameters):
+        writer.add_histogram('reward_grad/' + name, grad.detach().cpu().numpy(), batch)
+
+    for (name, param), grad in zip(policy.named_parameters(), policy_parameters):
+        writer.add_histogram('policy_grad/' + name, grad.detach().cpu().numpy(), batch)
+
+
+def log_episodes(writer, episodes, reward, batch):
+    writer.add_scalar(
+        'intrinsic_rewards/before_update',
+        torch_utils.total_rewards([ep.intrinsic_rewards(reward) for ep, _ in episodes]),
+        batch
+    )
+    writer.add_scalar(
+        'intrinsic_rewards/after_update',
+        torch_utils.total_rewards([ep.intrinsic_rewards(reward) for _, ep in episodes]),
+        batch
+    )
+
+    writer.add_scalar(
+        'mixed_rewards/before_update',
+        torch_utils.total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for ep, _ in episodes]),
+        batch
+    )
+    writer.add_scalar(
+        'mixed_rewards/after_update',
+        torch_utils.total_rewards([ep.intrinsic_rewards(reward) + ep.rewards for _, ep in episodes]),
+        batch
+    )
+
+    writer.add_scalar(
+        'sparse_rewards/before_update',
+        torch_utils.total_rewards([ep.sparse_rewards for ep, _ in episodes]),
+        batch
+    )
+    writer.add_scalar(
+        'sparse_rewards/after_update',
+        torch_utils.total_rewards([ep.sparse_rewards for _, ep in episodes]),
+        batch
+    )
+
+    writer.add_scalar('total_rewards/before_update',
+        torch_utils.total_rewards([ep.rewards for ep, _ in episodes]), batch)
+
+    writer.add_scalar('total_rewards/after_update',
+        torch_utils.total_rewards([ep.rewards for _, ep in episodes]), batch)
 
 
 if __name__ == '__main__':

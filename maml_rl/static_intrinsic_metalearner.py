@@ -64,7 +64,8 @@ class StaticIntrinsicMetaLearner(object):
     def inner_loss(self,
                    episodes,
                    params=None,
-                   use_intrinsic=True):
+                   use_intrinsic=True,
+                   sparse=True):
         """
         Compute the inner loss for a one-step gradient update.
         The inner loss is REINFORCE with baseline [2], computed on
@@ -81,7 +82,8 @@ class StaticIntrinsicMetaLearner(object):
         advantages = episodes.gae(
             values,
             intrinsic=intrinsic,
-            tau=self.tau
+            tau=self.tau,
+            sparse=sparse,
         )
         advantages = weighted_normalize(
             advantages,
@@ -116,7 +118,7 @@ class StaticIntrinsicMetaLearner(object):
         """
         # Fit the baseline to the training episodes.
         # Note: We only use extrinsic rewards here.
-        self.baseline.fit(episodes)
+        self.baseline.fit(episodes, sparse=True, intrinsic=self.reward)
 
         # Get the loss on the training episodes.
         loss = self.inner_loss(episodes, use_intrinsic=True)
@@ -140,7 +142,7 @@ class StaticIntrinsicMetaLearner(object):
         """
         # Fit the baseline to the training episodes.
         # Note: We only use extrinsic rewards here.
-        self.baseline.fit(episodes)
+        self.baseline.fit(episodes, sparse=True)
 
         # Get the loss on the training episodes.
         loss = self.inner_loss(
@@ -283,6 +285,7 @@ class StaticIntrinsicMetaLearner(object):
 
                 # Note: we assume that the baseline is already
                 # fitted using extrinsic rewards from train_episodes.
+                self.baseline.fit(valid_episodes, intrinsic=intrinsic)
                 values = self.baseline(valid_episodes)
                 advantages = valid_episodes.gae(
                     values,

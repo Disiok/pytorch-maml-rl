@@ -86,8 +86,8 @@ class StaticIntrinsicBatchSampler(object):
                 actions_tensor = actions_distribution.sample()
                 actions = actions_tensor.cpu().numpy()
 
-            new_observations, rewards, dones, new_batch_ids, _ = self.envs.step(actions)
-            episodes.append(observations, actions, rewards, batch_ids)
+            new_observations, rewards, dones, new_batch_ids, infos = self.envs.step(actions)
+            episodes.append(observations, actions, rewards, batch_ids, infos)
             observations, batch_ids = new_observations, new_batch_ids
 
         return episodes

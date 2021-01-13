@@ -108,8 +108,11 @@ def main(args):
 
         # Tensorboard
         writer.add_scalar('meta-test/loss', loss.item(), batch)
+        print('meta-test/loss {}'.format(loss.item()))
         writer.add_scalar('meta-test/total_rewards',
             total_rewards([ep.rewards for ep in episodes]), batch)
+        print('meta-test/total_rewards {}'.format(
+            total_rewards([ep.rewards for ep in episodes])))
 
         # Save policy network
         with open(os.path.join(save_folder,
